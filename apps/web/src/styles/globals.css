@@ -1,0 +1,154 @@
+@import "tailwindcss";
+
+/*
+ * The Notion design system from docs/design.md, declared once.
+ *
+ *   @theme  the tokens themselves, available as Tailwind utilities
+ *           (bg-marigold, text-graphite, text-heading-sm)
+ *   :root   a semantic layer mapping them onto the names shadcn/ui and the
+ *           chart components expect (--primary, --card, --chart-1…), so adding
+ *           one of those inherits the look with no further work.
+ *
+ * Rules worth not breaking: #f6f5f4 is the page canvas and #ffffff is the card
+ * surface — never inverted. Cards use 1px hairline borders, never shadows.
+ * #0075de is the only filled button colour on a screen; variety belongs in card
+ * backgrounds. No gradients.
+ */
+
+@theme {
+  /* --- colour ------------------------------------------------------------ */
+  --color-notion-blue: #0075de;
+  --color-paper-warmth: #f6f5f4;
+  --color-pure-white: #ffffff;
+  --color-ink-black: #000000;
+  --color-charcoal: #111111;
+  --color-stone: #757575;
+  --color-graphite: #615d59;
+  --color-slate: #696969;
+  --color-sky-tint: #e6f3fe;
+
+  /* The rotating accent cast — card backgrounds, like sticky notes. */
+  --color-marigold: #ffb110;
+  --color-coral: #f64932;
+  --color-saffron: #e89d01;
+  --color-vermillion: #e32d14;
+  --color-mocha: #b18164;
+  --color-signal-blue: #097fe8;
+  --color-sky-wash: #62aef0;
+  --color-midnight-ink: #02093a;
+
+  --color-hairline: rgba(0, 0, 0, 0.08);
+
+  /* --- type -------------------------------------------------------------- */
+  --font-notioninter: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-lyon-text: "Source Serif 4", "Source Serif Pro", Georgia, serif;
+
+  /* Aggressive negative tracking at display sizes; body stays normal. */
+  --text-caption: 12px;
+  --text-caption--line-height: 1.33;
+  --text-caption--letter-spacing: 0.01em;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 1.43;
+  --text-body: 16px;
+  --text-body--line-height: 1.5;
+  --text-subheading: 20px;
+  --text-subheading--line-height: 1;
+  --text-heading-sm: 22px;
+  --text-heading-sm--line-height: 1.27;
+  --text-heading-sm--letter-spacing: -0.011em;
+  --text-heading: 40px;
+  --text-heading--line-height: 1.2;
+  --text-heading-lg: 48px;
+  --text-heading-lg--line-height: 1.1;
+  --text-display-sm: 54px;
+  --text-display-sm--line-height: 1.04;
+  --text-display-sm--letter-spacing: -0.035em;
+  --text-display: 72px;
+  --text-display--line-height: 1.21;
+  --text-display--letter-spacing: -0.028em;
+
+  /* --- shape ------------------------------------------------------------- */
+  --radius-card: 12px;
+  --radius-button: 8px;
+  --radius-small: 4px;
+
+  --spacing-card: 24px;
+  --spacing-section: 80px;
+}
+
+/*
+ * The semantic layer. Component libraries read these names, so they inherit the
+ * Notion palette without being told about it.
+ */
+:root {
+  --background: var(--color-paper-warmth);
+  --foreground: var(--color-ink-black);
+  --card: var(--color-pure-white);
+  --card-foreground: var(--color-ink-black);
+  --primary: var(--color-notion-blue);
+  --primary-foreground: var(--color-pure-white);
+  --secondary: var(--color-sky-tint);
+  --secondary-foreground: var(--color-notion-blue);
+  --muted: var(--color-paper-warmth);
+  --muted-foreground: var(--color-stone);
+  --border: var(--color-hairline);
+  --ring: var(--color-notion-blue);
+  --destructive: var(--color-vermillion);
+
+  /* Charts read these; the four constraints map onto the accent cast. */
+  --chart-1: var(--color-notion-blue);
+  --chart-2: var(--color-marigold);
+  --chart-3: var(--color-coral);
+  --chart-4: var(--color-sky-wash);
+  --chart-5: var(--color-mocha);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-notioninter);
+    font-size: var(--text-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    /* lnum: tabular figures read better in a queue of token numbers. */
+    font-feature-settings: "lnum";
+  }
+
+  /* Visible focus, because officers work this panel by keyboard all day. */
+  :focus-visible {
+    outline: 2px solid var(--color-notion-blue);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-sky-tint);
+  }
+}
+
+@layer utilities {
+  /* The hairline-bordered card: the default surface, never a shadow. */
+  .surface-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+  }
+
+  /* Motion is 200ms ease for hovers; springs are reserved for character marks. */
+  .transition-notion {
+    transition-property: color, background-color, border-color, opacity, transform;
+    transition-duration: 200ms;
+    transition-timing-function: ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .transition-notion {
+      transition-duration: 1ms;
+    }
+  }
+}

@@ -12,3 +12,7 @@ dist/
 # false), so shipping them with the code is what keeps a deploy from silently
 # degrading to "nothing verifies". Never put a PRIVATE key here.
 !apps/api/src/lib/aadhaar/certs/*.cer
+
+# tsc must never emit into src/ — these appeared once from a stray `tsc -b`.
+apps/web/src/**/*.js
+apps/web/src/**/*.js.map
