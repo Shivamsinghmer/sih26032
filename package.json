@@ -1,0 +1,18 @@
+{
+  "name": "mandi-queue",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SIH 26032 — capacity-aware slot booking and queue management for mandi procurement centres",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "build": "npm run build -w @mandi/shared && npm run build -w @mandi/api",
+    "dev:api": "npm run dev -w @mandi/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:push": "npm run db:push -w @mandi/api",
+    "db:seed": "npm run db:seed -w @mandi/api",
+    "db:studio": "npm run db:studio -w @mandi/api",
+    "db:reset": "npm run db:reset -w @mandi/api"
+  }
+}

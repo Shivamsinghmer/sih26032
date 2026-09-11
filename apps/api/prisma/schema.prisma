@@ -1,0 +1,417 @@
+// Mandi Queue — SIH 26032
+// See docs/DATA-MODEL.md for why each model exists.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Neon needs two connection strings and they are not interchangeable.
+// DATABASE_URL contains `-pooler` and is what the API uses at runtime.
+// DIRECT_URL is the same host without it, for `db push` and `migrate` — DDL
+// over the pooler is unreliable. Both carry connect_timeout=15, because Neon's
+// free tier suspends the compute and the first wake outlasts Prisma's 5s default.
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  farmer
+  officer
+  admin
+}
+
+enum Locale {
+  hi
+  pa
+  en
+}
+
+enum Crop {
+  PADDY
+  WHEAT
+}
+
+/// RESLOTTED is a distinct state rather than a flag, because the farmer panel
+/// renders it differently: it carries an explanation and an instruction not to travel.
+enum BookingStatus {
+  BOOKED
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  RESLOTTED
+  NO_SHOW
+  CANCELLED
+}
+
+/// The four hard resources. Stored so historical analysis can answer which one
+/// limited a district most often last season.
+enum Constraint {
+  BARDANA
+  LABOUR
+  WEIGHBRIDGE
+  YARD
+}
+
+enum CapacityStatus {
+  DRAFT
+  PUBLISHED
+}
+
+/// Ordered so stageIndex() can drive the progress tracker.
+enum PaymentStage {
+  AWAITING_JFORM
+  J_FORM_ISSUED
+  LIFTED
+  AGENCY_ACKNOWLEDGED
+  SENT_FOR_PAYMENT
+  CREDITED
+}
+
+enum NotificationChannel {
+  SMS
+  PUSH
+  IVR
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+/// OFFICER_ATTESTATION exists for tenant cultivators, who do not own the land
+/// they farm. The flow is not built; see "Still open" in docs/AUTH.md.
+enum VerificationMethod {
+  AADHAAR_SECURE_QR
+  LAND_RECORD_MATCH
+  OFFICER_ATTESTATION
+}
+
+// ---------------------------------------------------------------------------
+// Actors
+// ---------------------------------------------------------------------------
+
+/// Identity plus the two fields that gate everything else: landAcres and
+/// landVerified. Verified acreage caps sellable quantity — the same principle
+/// as Odisha's token quota, but derived from the actual record rather than a
+/// flat cap, which is the failure that left ~7,000 Bargarh farmers holding
+/// unsellable grain.
+model Farmer {
+  id      String @id @default(cuid())
+  /// Clerk user id. Unique, and the only link between a session and a row —
+  /// identity comes from the session, never from a request body.
+  clerkId String @unique
+  phone   String @unique
+
+  name     String
+  village  String
+  district String
+  state    String
+
+  landAcres    Float?
+  landVerified Boolean @default(false)
+
+  /// Set only by a UIDAI-signed Secure QR. A missing certificate cannot
+  /// silently upgrade an unchecked scan.
+  aadhaarVerified   Boolean   @default(false)
+  aadhaarLast4      String?
+  aadhaarRefId      String?
+  aadhaarVerifiedAt DateTime?
+
+  /// Which of the chained checks established this farmer's entitlement.
+  verificationMethod VerificationMethod?
+
+  /// Drives which notification template renders.
+  preferredLocale Locale @default(hi)
+
+  bookings      Booking[]
+  lots          Lot[]
+  delegations   Delegation[]
+  notifications Notification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([district])
+}
+
+/// The commission agent books, transports and often fronts cash. A system that
+/// routes around him gets ignored on the ground, so he is a first-class actor
+/// with an explicit, revocable grant rather than a shared password.
+model Aarhtiya {
+  id        String  @id @default(cuid())
+  clerkId   String  @unique
+  phone     String  @unique
+  name      String
+  licenceNo String  @unique
+  centreId  String?
+  centre    Centre? @relation(fields: [centreId], references: [id])
+
+  delegations Delegation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Delegation {
+  id         String   @id @default(cuid())
+  farmerId   String
+  farmer     Farmer   @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  aarhtiyaId String
+  aarhtiya   Aarhtiya @relation(fields: [aarhtiyaId], references: [id], onDelete: Cascade)
+
+  /// Revocable by the farmer at any time. A grant with no end is a shared password.
+  grantedAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@unique([farmerId, aarhtiyaId])
+  @@index([aarhtiyaId, revokedAt])
+}
+
+/// Officer and admin accounts. Neither role is self-assignable — both are
+/// granted by a person in the Clerk dashboard, because a public form that hands
+/// out officer rights would let anyone publish a centre's capacity.
+model Officer {
+  id      String @id @default(cuid())
+  clerkId String @unique
+  phone   String @unique
+  name    String
+  role    Role   @default(officer)
+
+  /// Null for a district admin, who is not tied to one centre.
+  centreId String?
+  centre   Centre? @relation(fields: [centreId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Places and capacity
+// ---------------------------------------------------------------------------
+
+/// Fixed physical characteristics only. Anything that changes day to day
+/// belongs in CapacityDay.
+model Centre {
+  id       String @id @default(cuid())
+  name     String
+  code     String @unique
+  village  String
+  district String
+  state    String
+
+  weighbridgeCount Int
+  /// Local time, 24h, e.g. 9 and 18.
+  openHour         Int   @default(9)
+  closeHour        Int   @default(18)
+  /// Quintals of grain the yard can physically hold at once.
+  yardCapacityQuintals Float
+
+  latitude  Float?
+  longitude Float?
+
+  capacityDays CapacityDay[]
+  bookings     Booking[]
+  lots         Lot[]
+  officers     Officer[]
+  aarhtiyas    Aarhtiya[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([district])
+}
+
+/// The important one: the officer's five daily inputs *and* the engine's output
+/// on a single row. Keeping them together means every published number is
+/// auditable back to the ground conditions that produced it — which matters
+/// when a farmer asks why their slot moved.
+model CapacityDay {
+  id       String   @id @default(cuid())
+  centreId String
+  centre   Centre   @relation(fields: [centreId], references: [id], onDelete: Cascade)
+  /// Date only, midnight UTC. The unique pair makes the capacity upsert safe.
+  date     DateTime @db.Date
+
+  // --- Officer input: the five numbers, entered once a day ---
+  bardanaBags            Int
+  labourGangs            Int
+  trucksAssigned         Int
+  weighbridgeHours       Float
+  openingBacklogQuintals Float
+
+  // --- Engine output ---
+  computedQuintals  Float?
+  bindingConstraint Constraint?
+  /// Per-constraint quintal figures, so the officer screen can draw four bars
+  /// on one scale and colour only the binding one.
+  breakdown         Json?
+
+  /// The officer's override of the computed figure. What is actually bookable.
+  approvedQuintals Float?
+
+  status      CapacityStatus @default(DRAFT)
+  publishedAt DateTime?
+
+  bookings Booking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([centreId, date])
+  @@index([date])
+}
+
+// ---------------------------------------------------------------------------
+// The sale
+// ---------------------------------------------------------------------------
+
+model Booking {
+  id            String       @id @default(cuid())
+  farmerId      String
+  farmer        Farmer       @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  centreId      String
+  centre        Centre       @relation(fields: [centreId], references: [id], onDelete: Cascade)
+  capacityDayId String?
+  capacityDay   CapacityDay? @relation(fields: [capacityDayId], references: [id])
+
+  slotStart        DateTime
+  slotEnd          DateTime
+  crop             Crop
+  quantityQuintals Float
+
+  status      BookingStatus @default(BOOKED)
+  tokenNumber Int?
+
+  /// Scanned at entry, replacing the paper slip.
+  gatePassCode String @unique
+
+  /// Preserved across a re-slot. A farmer bumped once does not go to the back
+  /// of the queue when they are bumped again; without this the system quietly
+  /// punishes the people it disrupted.
+  seniorityAt DateTime @default(now())
+
+  /// Travels with the SMS. "Bardana shortage at the centre" is actionable;
+  /// "slot unavailable" is not.
+  reslotReason String?
+  reslotCount  Int     @default(0)
+
+  arrivedAt   DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  lot Lot?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Serves the day-of queue board.
+  @@index([centreId, status])
+  @@index([farmerId, slotStart])
+}
+
+/// Everything after the trolley is unloaded.
+model Lot {
+  id        String  @id @default(cuid())
+  bookingId String  @unique
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  farmerId  String
+  farmer    Farmer  @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  centreId  String
+  centre    Centre  @relation(fields: [centreId], references: [id], onDelete: Cascade)
+
+  // --- Quality gate. The limit lives in SeasonConfig, not in code: it differs
+  // by crop (17% paddy, 12% wheat) and can be relaxed by notification in a bad year.
+  moisturePercent Float?
+  qualityPass     Boolean?
+  rejectionReason String?
+
+  netQuintals Float?
+  /// Integer paise. Never a float.
+  amountPaise BigInt?
+  /// Read from SeasonConfig at the moment of issue, never hard-coded in the UI.
+  mspPaisePerQuintal BigInt?
+  jFormNumber        String? @unique
+
+  // --- Payment timestamps. paymentStage is derived from these by deriveStage()
+  // and stored only as a denormalisation for querying, so the tracker can never
+  // disagree with what happened.
+  jFormIssuedAt DateTime?
+  liftedAt      DateTime?
+  agencyAckAt   DateTime?
+  pfmsBatchAt   DateTime?
+  creditedAt    DateTime?
+
+  paymentStage PaymentStage @default(AWAITING_JFORM)
+
+  /// J-form + 72 hours.
+  slaDueAt    DateTime?
+  slaBreached Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Serves the centre payment view.
+  @@index([centreId, paymentStage])
+  /// Serves the admin escalation queue.
+  @@index([slaBreached])
+  @@index([farmerId])
+}
+
+// ---------------------------------------------------------------------------
+// Supporting
+// ---------------------------------------------------------------------------
+
+/// One row per channel per event. `template` records which DLT-registered
+/// template was used — Indian commercial SMS requires pre-approved bodies, so
+/// the key is operationally meaningful, not just a log label.
+model Notification {
+  id       String @id @default(cuid())
+  farmerId String
+  farmer   Farmer @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+
+  channel NotificationChannel
+  template String
+  locale  Locale
+  body    String
+  toPhone String
+
+  status NotificationStatus @default(QUEUED)
+  sentAt DateTime?
+  error  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([farmerId, createdAt])
+}
+
+/// MSP is notified per season on CACP's recommendation, so it is configuration
+/// a district admin edits — never a constant in the UI. The J-form route reads
+/// it at the moment of issue.
+model SeasonConfig {
+  id     String @id @default(cuid())
+  /// e.g. "KMS 2026-27".
+  season String
+  crop   Crop
+  /// Integer paise per quintal.
+  mspPaisePerQuintal BigInt
+  /// FCI cap: 17% paddy, 12% wheat.
+  moistureLimitPercent Float
+
+  state    String
+  active   Boolean  @default(false)
+  startsOn DateTime @db.Date
+  endsOn   DateTime @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([season, crop, state])
+  @@index([active])
+}
