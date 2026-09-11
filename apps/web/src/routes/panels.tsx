@@ -5,7 +5,7 @@
 
 import { Outlet } from "react-router";
 import { PanelNav, type NavItem } from "../components/panel-nav.js";
-import { Page, PageHeader, NotBuiltYet, Card } from "../components/page.js";
+import { Page, PageHeader, NotBuiltYet } from "../components/page.js";
 import { useMe, RequireRole, RequireFarmerGates } from "../auth/session.js";
 
 const FARMER_NAV: NavItem[] = [
@@ -59,30 +59,6 @@ export function AdminLayout() {
     <RequireRole allow={["admin"]}>
       <Shell items={ADMIN_NAV} />
     </RequireRole>
-  );
-}
-
-export function FarmerHome() {
-  const me = useMe();
-  return (
-    <Page>
-      <PageHeader
-        title={`Namaste, ${me.farmer?.name ?? "farmer"}`}
-        lede={`${me.farmer?.village ?? ""}${me.farmer?.village ? ", " : ""}${me.farmer?.district ?? ""}`}
-      />
-      <div className="grid gap-4 md:grid-cols-2">
-        <NotBuiltYet what="Next booking" endpoint="GET /farmer/dashboard" />
-        <NotBuiltYet what="Payment tracker" endpoint="GET /farmer/lots" />
-      </div>
-      <Card className="mt-4">
-        <h2 className="text-heading-sm font-semibold">Verified to sell</h2>
-        <p className="mt-2 text-body text-graphite">
-          {me.farmer?.landVerified
-            ? `${me.farmer.landAcres ?? "—"} acres verified. Your seasonal quantity is capped against this.`
-            : "Your land record is not verified yet, so no quantity cap has been set. A centre officer can attest it."}
-        </p>
-      </Card>
-    </Page>
   );
 }
 

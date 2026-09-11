@@ -11,11 +11,12 @@ import { Landing } from "./routes/landing.js";
 import { SignInPage, SignUpPage } from "./routes/auth-pages.js";
 import { OnboardingLayout, OnboardingProfile, OnboardingVerify } from "./routes/onboarding.js";
 import {
-  FarmerLayout, FarmerHome,
+  FarmerLayout,
   CentreLayout, CentreHome,
   AdminLayout, AdminHome,
   NotFound,
 } from "./routes/panels.js";
+import { FarmerDashboard, FarmerBook, FarmerQueue, FarmerPayments } from "./routes/farmer.js";
 
 /** Everything below this resolves /me once and shares it. */
 function SessionBoundary() {
@@ -46,7 +47,12 @@ export const router = createBrowserRouter([
       {
         path: "/farmer",
         element: <FarmerLayout />,
-        children: [{ index: true, element: <FarmerHome /> }],
+        children: [
+          { index: true, element: <FarmerDashboard /> },
+          { path: "book", element: <FarmerBook /> },
+          { path: "queue", element: <FarmerQueue /> },
+          { path: "payments", element: <FarmerPayments /> },
+        ],
       },
       {
         path: "/centre",

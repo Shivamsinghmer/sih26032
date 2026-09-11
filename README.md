@@ -99,8 +99,9 @@ to admin.
 | 3a · capacity engine, slot allocator, payment stages, seed — 29 unit tests | done |
 | 3b · `apps/api` — the REST contract in [API.md](./docs/API.md), all endpoints | done |
 | 3c · `apps/api` — Aadhaar Secure QR verification — 15 unit tests | done |
-| 4 · `apps/web` — Vite shell, Clerk provider, `/me` guard | next |
-| 5 · `apps/web` — the three panels, farmer first | not started |
+| 4 · `apps/web` — Vite shell, Clerk provider, `/me` guard | done |
+| 5a · `apps/web` — farmer panel: dashboard, booking, live queue, payments | done |
+| 5b · `apps/web` — centre officer and district admin panels | next |
 | 6 · Socket.IO, with an authenticated handshake | not started |
 | 7 · PWA — manifest, icons, service worker | not started |
 
