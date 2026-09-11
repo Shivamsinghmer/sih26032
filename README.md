@@ -117,8 +117,30 @@ mocks far harder than declared ones.
 | Capacity engine and its constraint maths | Aadhaar eKYC beyond Secure QR signature checks |
 | Slot allocation, overbooking, ETA | State land records (Jamabandi / Khasra) |
 | Payment state machine and SLA clocks | PFMS payment rail |
-| Queue management and realtime push | SMS / IVR delivery (logs to console) |
+| Queue management and re-slotting | SMS / IVR delivery — **email via Resend stands in** |
 | Aadhaar Secure QR signature verification | — |
+
+### Notifications: email now, SMS in production
+
+The prototype delivers notifications by **email, through Resend**. That is a
+deliberate substitution and not a claim that email is the right channel — the
+farmers this serves are the least likely to have or check an inbox, and many are
+on feature phones where SMS is the only thing that arrives.
+
+The reason is practical: Indian commercial SMS requires a DLT-registered header
+and pre-approved template bodies, which takes weeks to obtain and cannot be done
+inside a hackathon window. What the swap buys is that the pipeline is **real
+rather than stubbed** — templates render per locale (Punjabi, Hindi, English), a
+message is actually delivered, and every send is recorded with its outcome.
+
+Everything above the transport already speaks in DLT-shaped template keys, so
+moving to SMS is one function, not a rewrite.
+
+Leave `RESEND_API_KEY` blank and messages are still rendered and recorded, just
+not delivered — the app runs end to end without a provider account. Note that
+Resend's shared sender (`onboarding@resend.dev`) only delivers to the address of
+the account that owns the key, so a demo needs `NOTIFY_REDIRECT_TO` pointed at a
+real inbox, or a verified domain.
 
 ## Security posture
 

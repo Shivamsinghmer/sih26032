@@ -73,7 +73,13 @@ enum PaymentStage {
   CREDITED
 }
 
+/// EMAIL is the prototype channel. SMS and IVR remain the right production
+/// channels — a farmer with a feature phone cannot receive anything else — but
+/// Indian commercial SMS needs a DLT-registered header and pre-approved template
+/// bodies, which takes weeks to obtain. Email proves the same notification
+/// pipeline end to end in the meantime, with real delivery rather than a stub.
 enum NotificationChannel {
+  EMAIL
   SMS
   PUSH
   IVR
@@ -108,6 +114,11 @@ model Farmer {
   /// identity comes from the session, never from a request body.
   clerkId String @unique
   phone   String @unique
+
+  /// Prototype notification address. Optional, because a farmer having an email
+  /// is exactly the assumption this project does not want to bake in — the
+  /// production channel is SMS to the phone above.
+  email    String?
 
   name     String
   village  String

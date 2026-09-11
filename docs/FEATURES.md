@@ -22,7 +22,7 @@ framework coupling, so they are also the cheapest to move.
 | Proactive re-slot before travel | must | Built — `reslotOverflow()` |
 | Live queue position & moving ETA | must | Built — `/farmer/queue` |
 | Digital gate pass | must | Built — code issued on booking |
-| Notifications (SMS / push / IVR) | must | Templates + routing built, delivery stubbed |
+| Notifications (SMS / push / IVR) | must | Built — **email via Resend** in the prototype; SMS needs DLT registration |
 | Payment tracker, five stages | must | Built — `/farmer/payments` |
 | Defer slot without losing seniority | should | `seniorityAt` in place, UI not built |
 | Delegate to an aarhtiya | should | Model in place, UI not built |

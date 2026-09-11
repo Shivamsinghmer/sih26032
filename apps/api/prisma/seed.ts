@@ -237,6 +237,9 @@ async function main(): Promise<void> {
         data: {
           clerkId: `seed_farmer_${i + 1}`,
           phone: `+9198${String(11000000 + i).padStart(8, "0")}`,
+          // Prototype notification address. Nobody owns these, which is why a
+          // demo needs NOTIFY_REDIRECT_TO pointed at a real inbox.
+          email: `farmer${i + 1}@mandi-queue.invalid`,
           name: spec.name,
           village: spec.village,
           district: "Sangrur",

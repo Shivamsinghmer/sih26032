@@ -37,6 +37,16 @@ const schema = z.object({
   // with auth off — which defeats the point of having a demo mode.
   // Ignored entirely when CLERK_SECRET_KEY is set.
   DEMO_ROLE: z.enum(["farmer", "officer", "admin"]).default("farmer"),
+
+  // --- Notifications (prototype: email via Resend; production: SMS + IVR) ---
+  // Blank is allowed: messages are then rendered and recorded but not sent, so
+  // the app runs end to end without a provider account.
+  RESEND_API_KEY: z.string().default(""),
+  RESEND_FROM: z.string().default("Mandi Queue <onboarding@resend.dev>"),
+  // Sends every message to one real inbox. Needed because Resend's shared
+  // sender only delivers to the account owner, and seeded farmers have
+  // addresses nobody owns. The recorded row still keeps the intended address.
+  NOTIFY_REDIRECT_TO: z.string().default(""),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -77,6 +87,16 @@ for (const [name, url] of [["DATABASE_URL", raw.DATABASE_URL], ["DIRECT_URL", ra
   if (url.includes("neon.tech") && !url.includes("connect_timeout=")) {
     console.warn(`${name} has no connect_timeout. Neon's first connection after an idle spell can take 7s+ and will fail against Prisma's 5s default. Append &connect_timeout=15.`);
   }
+}
+
+if (!raw.RESEND_API_KEY) {
+  console.warn("RESEND_API_KEY is blank. Notifications will be rendered and recorded, but not delivered.");
+} else if (raw.RESEND_FROM.includes("onboarding@resend.dev") && !raw.NOTIFY_REDIRECT_TO) {
+  // The single most common way to think email is broken when it is not.
+  console.warn(
+    "RESEND_FROM is Resend's shared sender, which only delivers to your own account address. " +
+      "Set NOTIFY_REDIRECT_TO to that address, or verify a domain in Resend.",
+  );
 }
 
 export const env = {

@@ -25,6 +25,10 @@ const onboardingSchema = z.object({
   district: z.string().trim().min(1, "Enter your district.").max(120),
   state: z.string().trim().min(1, "Enter your state.").max(120),
   preferredLocale: z.enum(LOCALES).default("hi"),
+  // Prototype only: notifications go by email until DLT-registered SMS is
+  // available. Optional, because requiring an inbox would exclude exactly the
+  // farmers this system is for.
+  email: z.email("That email address does not look right.").optional(),
   // Optional at this step: the land record is a separate part of the chain, and
   // blocking registration on it is what excludes tenant cultivators.
   landAcres: z.number().positive().max(1000).optional(),
@@ -58,6 +62,7 @@ onboardingRouter.post("/onboarding", withSession, async (req, res) => {
       district: body.district,
       state: body.state,
       preferredLocale: body.preferredLocale,
+      email: body.email ?? null,
       landAcres: body.landAcres ?? null,
       landVerified: false,
       aadhaarVerified: false,

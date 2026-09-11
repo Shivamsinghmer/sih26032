@@ -1,32 +1,68 @@
 /**
  * Notifications.
  *
- * **Delivery is stubbed and says so.** Every notification is recorded as a real
- * `Notification` row and logged to the console; nothing is handed to an SMS
- * provider yet. Declaring that boundary matters more than hiding it — a hidden
- * mock is punished far harder than a declared one.
+ * **The prototype sends email, via Resend. Production must send SMS and IVR.**
  *
- * What is real here is the part that is actually hard to retrofit: the rows, the
- * per-locale template bodies, and the DLT template key recorded against each
- * send. Indian commercial SMS requires pre-approved template bodies, so
- * `template` is operationally meaningful rather than a log label, and wiring a
- * provider later becomes one function rather than a rewrite.
+ * That is a deliberate substitution, not a claim that email is the right
+ * channel: the farmers this system exists for are the ones least likely to have
+ * or check an inbox, and many are on feature phones where SMS is the only thing
+ * that arrives. The reason for the swap is practical — Indian commercial SMS
+ * requires a DLT-registered header and pre-approved template bodies, which takes
+ * weeks to obtain and cannot be done inside a hackathon window.
+ *
+ * What the swap buys is that the pipeline becomes **real** rather than stubbed:
+ * templates render per locale, a message is actually delivered, and the row
+ * records what happened. Swapping the transport back to SMS is one function,
+ * because everything above it already speaks in DLT-shaped template keys.
+ *
+ * Say this out loud rather than letting a panel discover it.
  */
 
+import { Resend } from "resend";
 import type { Constraint, Locale, NotificationTemplate } from "@mandi/shared";
 import { prisma } from "../db.js";
+import { env } from "../env.js";
 
-/** Values substituted into a template body. */
 export type TemplateVars = Record<string, string | number>;
 
 type Bodies = Record<Locale, string>;
 
+/** Subject lines. Kept short — this is the only part most people read. */
+const SUBJECTS: Record<NotificationTemplate, Bodies> = {
+  SLOT_CONFIRMED: {
+    en: "Slot confirmed at {centre}",
+    hi: "{centre} में स्लॉट बुक",
+    pa: "{centre} ਵਿਖੇ ਸਲਾਟ ਬੁੱਕ",
+  },
+  SLOT_RESLOTTED: {
+    en: "Your slot has moved — do not travel today",
+    hi: "आपका स्लॉट बदल गया — आज न आएं",
+    pa: "ਤੁਹਾਡਾ ਸਲਾਟ ਬਦਲ ਗਿਆ — ਅੱਜ ਨਾ ਆਓ",
+  },
+  MOISTURE_FAIL: {
+    en: "Moisture too high — a new slot has been issued",
+    hi: "नमी अधिक — नया स्लॉट जारी",
+    pa: "ਨਮੀ ਵੱਧ — ਨਵਾਂ ਸਲਾਟ ਜਾਰੀ",
+  },
+  JFORM_ISSUED: {
+    en: "J-form {jForm} issued — payment due in {slaHours} hours",
+    hi: "J-form {jForm} जारी — {slaHours} घंटे में भुगतान",
+    pa: "J-ਫਾਰਮ {jForm} ਜਾਰੀ — {slaHours} ਘੰਟਿਆਂ ਵਿੱਚ ਭੁਗਤਾਨ",
+  },
+  PAYMENT_CREDITED: {
+    en: "₹{amount} credited for J-form {jForm}",
+    hi: "J-form {jForm} के लिए ₹{amount} जमा",
+    pa: "J-ਫਾਰਮ {jForm} ਲਈ ₹{amount} ਜਮ੍ਹਾਂ",
+  },
+};
+
 /**
- * The DLT-registered bodies, one per locale.
+ * The message bodies, one per locale.
  *
- * A farmer who cannot read the message cannot act on it, and the whole argument
- * for this system is that an unexplained delay is what sends people back to
- * sleeping in the queue. `Farmer.preferredLocale` picks the row.
+ * These stay SMS-length on purpose. They are the exact text that will be
+ * submitted for DLT approval, so writing them long now would mean rewriting
+ * them later — and a farmer reading on a small screen is served better by two
+ * sentences than by a letter.
  */
 const TEMPLATES: Record<NotificationTemplate, Bodies> = {
   SLOT_CONFIRMED: {
@@ -45,44 +81,18 @@ const TEMPLATES: Record<NotificationTemplate, Bodies> = {
     pa: "ਨਮੀ {moisture}% ਸੀਮਾ {limit}% ਤੋਂ ਵੱਧ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਸੁਕਾਓ। {date} ਲਈ ਨਵਾਂ ਸਲਾਟ ਜਾਰੀ ਕੀਤਾ ਗਿਆ ਹੈ।",
   },
   JFORM_ISSUED: {
-    en: "J-form {jForm} issued for {quantity} qtl, Rs {amount}. Payment is due within {slaHours} hours.",
-    hi: "{quantity} क्विंटल के लिए J-form {jForm} जारी, राशि {amount} रुपये। भुगतान {slaHours} घंटे में देय।",
-    pa: "{quantity} ਕੁਇੰਟਲ ਲਈ J-ਫਾਰਮ {jForm} ਜਾਰੀ, ਰਕਮ {amount} ਰੁਪਏ। ਭੁਗਤਾਨ {slaHours} ਘੰਟਿਆਂ ਵਿੱਚ।",
+    en: "J-form {jForm} issued for {quantity} qtl, ₹{amount}. Payment is due within {slaHours} hours.",
+    hi: "{quantity} क्विंटल के लिए J-form {jForm} जारी, राशि ₹{amount}। भुगतान {slaHours} घंटे में देय।",
+    pa: "{quantity} ਕੁਇੰਟਲ ਲਈ J-ਫਾਰਮ {jForm} ਜਾਰੀ, ਰਕਮ ₹{amount}। ਭੁਗਤਾਨ {slaHours} ਘੰਟਿਆਂ ਵਿੱਚ।",
   },
   PAYMENT_CREDITED: {
-    en: "Rs {amount} credited to your account for J-form {jForm}.",
-    hi: "J-form {jForm} के लिए {amount} रुपये आपके खाते में जमा कर दिए गए हैं।",
-    pa: "J-ਫਾਰਮ {jForm} ਲਈ {amount} ਰੁਪਏ ਤੁਹਾਡੇ ਖਾਤੇ ਵਿੱਚ ਜਮ੍ਹਾਂ ਹੋ ਗਏ ਹਨ।",
+    en: "₹{amount} credited to your account for J-form {jForm}.",
+    hi: "J-form {jForm} के लिए ₹{amount} आपके खाते में जमा कर दिए गए हैं।",
+    pa: "J-ਫਾਰਮ {jForm} ਲਈ ₹{amount} ਤੁਹਾਡੇ ਖਾਤੇ ਵਿੱਚ ਜਮ੍ਹਾਂ ਹੋ ਗਏ ਹਨ।",
   },
 };
 
-/** Substitutes {placeholders}. An unknown key is left visible rather than silently blanked. */
-export function render(
-  template: NotificationTemplate,
-  locale: Locale,
-  vars: TemplateVars,
-): string {
-  const body = TEMPLATES[template][locale] ?? TEMPLATES[template].en;
-  return body.replace(/\{(\w+)\}/g, (match, key: string) =>
-    key in vars ? String(vars[key]) : match,
-  );
-}
-
-/** Rupees from integer paise, formatted for an Indian reader. */
-export function formatPaise(paise: bigint): string {
-  const rupees = Number(paise / 100n);
-  return rupees.toLocaleString("en-IN");
-}
-
-/**
- * Why a slot moved, in the farmer's own language.
- *
- * `reslotReason()` in the shared package returns English, which is right for the
- * stored audit trail and for tests. It is wrong for the SMS: a reason the farmer
- * cannot read is no better than "slot unavailable", and the whole argument for
- * this system is that an unexplained delay is what sends people back to sleeping
- * in the queue.
- */
+/** Why a slot moved, in the farmer's own language. */
 const CONSTRAINT_REASONS: Record<Constraint, Bodies> = {
   BARDANA: {
     en: "Gunny bag shortage at {centre}.",
@@ -106,13 +116,56 @@ const CONSTRAINT_REASONS: Record<Constraint, Bodies> = {
   },
 };
 
-export function localisedReslotReason(
-  constraint: Constraint,
-  centreName: string,
-  locale: Locale,
-): string {
+function fill(text: string, vars: TemplateVars): string {
+  // An unknown key is left visible rather than silently blanked, so a missing
+  // variable shows up in testing instead of shipping as a gap in a sentence.
+  return text.replace(/\{(\w+)\}/g, (match, key: string) =>
+    key in vars ? String(vars[key]) : match,
+  );
+}
+
+export function render(template: NotificationTemplate, locale: Locale, vars: TemplateVars): string {
+  return fill(TEMPLATES[template][locale] ?? TEMPLATES[template].en, vars);
+}
+
+export function renderSubject(template: NotificationTemplate, locale: Locale, vars: TemplateVars): string {
+  return fill(SUBJECTS[template][locale] ?? SUBJECTS[template].en, vars);
+}
+
+export function localisedReslotReason(constraint: Constraint, centreName: string, locale: Locale): string {
   const body = CONSTRAINT_REASONS[constraint][locale] ?? CONSTRAINT_REASONS[constraint].en;
   return body.replace("{centre}", centreName);
+}
+
+/** Rupees from integer paise, formatted for an Indian reader. */
+export function formatPaise(paise: bigint): string {
+  return Number(paise / 100n).toLocaleString("en-IN");
+}
+
+const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
+
+/**
+ * Minimal HTML. Deliberately plain: the message is two sentences, and a farmer
+ * on a slow connection should not wait on a layout.
+ */
+function wrap(subject: string, body: string, locale: Locale): string {
+  return `<!doctype html><html lang="${locale}"><body style="margin:0;background:#f6f5f4;font:16px/1.5 system-ui,sans-serif;color:#000">
+<div style="max-width:520px;margin:0 auto;padding:24px">
+  <p style="margin:0 0 16px;font-size:14px;color:#757575">Mandi Queue</p>
+  <div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:12px;padding:24px">
+    <h1 style="margin:0 0 12px;font-size:20px;line-height:1.3">${escapeHtml(subject)}</h1>
+    <p style="margin:0;font-size:16px">${escapeHtml(body)}</p>
+  </div>
+  <p style="margin:16px 0 0;font-size:12px;color:#757575">
+    Prototype notice: in production this message is delivered by SMS and IVR, which is what reaches a farmer on a feature phone.
+  </p>
+</div></body></html>`;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
+  );
 }
 
 export interface NotifyInput {
@@ -122,17 +175,18 @@ export interface NotifyInput {
 }
 
 /**
- * Records one notification and logs it.
+ * Renders, sends and records one notification.
  *
- * Never throws: a failure to notify must not roll back the booking, re-slot or
- * J-form that caused it. The row is the audit trail, so a send that could not be
- * recorded is logged loudly rather than swallowed.
+ * **Never throws.** A failure to notify must not roll back the booking, re-slot
+ * or J-form that caused it — the sale happened whether or not the email landed.
+ * Every outcome is recorded instead: SENT when the provider accepted it, FAILED
+ * with the reason when it did not, QUEUED when there is no provider configured.
  */
 export async function notify(input: NotifyInput): Promise<void> {
   try {
     const farmer = await prisma.farmer.findUnique({
       where: { id: input.farmerId },
-      select: { phone: true, preferredLocale: true },
+      select: { phone: true, email: true, preferredLocale: true, name: true },
     });
     if (!farmer) {
       console.error(`notify: no farmer ${input.farmerId}, template ${input.template}`);
@@ -141,28 +195,73 @@ export async function notify(input: NotifyInput): Promise<void> {
 
     const locale = farmer.preferredLocale as Locale;
     const body = render(input.template, locale, input.vars);
+    const subject = renderSubject(input.template, locale, input.vars);
+
+    /**
+     * Resend's shared sender can only deliver to the account owner's own
+     * address, and seeded farmers have addresses nobody owns. NOTIFY_REDIRECT_TO
+     * points every message at one real inbox so the demo actually delivers —
+     * and the row still records the address it was *meant* for, so the redirect
+     * cannot quietly rewrite the audit trail.
+     */
+    const intended = farmer.email;
+    const deliverTo = env.NOTIFY_REDIRECT_TO || intended;
+
+    let status: "SENT" | "FAILED" | "QUEUED" = "QUEUED";
+    let error: string | null = null;
+
+    if (!resend) {
+      error = "RESEND_API_KEY is not set; message recorded but not sent.";
+    } else if (!deliverTo) {
+      status = "FAILED";
+      error = "This farmer has no email address and NOTIFY_REDIRECT_TO is not set.";
+    } else {
+      const sent = await resend.emails.send({
+        from: env.RESEND_FROM,
+        to: deliverTo,
+        subject,
+        html: wrap(subject, body, locale),
+        text: body,
+      });
+      if (sent.error) {
+        status = "FAILED";
+        error = `${sent.error.name}: ${sent.error.message}`;
+      } else {
+        status = "SENT";
+      }
+    }
 
     await prisma.notification.create({
       data: {
         farmerId: input.farmerId,
-        channel: "SMS",
+        channel: "EMAIL",
+        // Still the DLT-shaped key, so the SMS migration is a transport swap.
         template: input.template,
         locale: farmer.preferredLocale,
         body,
-        toPhone: farmer.phone,
-        // QUEUED, not SENT: nothing has been delivered. Marking these SENT would
-        // be the exact hidden mock this project promises not to ship.
-        status: "QUEUED",
+        // The address this was addressed to, not the redirect target.
+        toPhone: intended ?? farmer.phone,
+        status,
+        sentAt: status === "SENT" ? new Date() : null,
+        error,
       },
     });
 
-    console.log(`[sms:stub] -> ${farmer.phone} (${locale}) ${input.template}\n           ${body}`);
-  } catch (error) {
-    console.error(`notify: failed to record ${input.template} for ${input.farmerId}`, error);
+    const tag = status === "SENT" ? "sent" : status === "FAILED" ? "FAILED" : "queued";
+    const redirected = env.NOTIFY_REDIRECT_TO && intended && env.NOTIFY_REDIRECT_TO !== intended;
+    console.log(
+      `[email:${tag}] ${input.template} (${locale}) -> ${deliverTo ?? "nobody"}` +
+        `${redirected ? ` [redirected from ${intended}]` : ""}` +
+        `${error ? `\n           ${error}` : ""}\n           ${body}`,
+    );
+  } catch (caught) {
+    console.error(`notify: failed to record ${input.template} for ${input.farmerId}`, caught);
   }
 }
 
-/** Fans out one template to many farmers — the re-slot path, mainly. */
+/** Fans out to many farmers — the re-slot path, mainly. */
 export async function notifyMany(inputs: NotifyInput[]): Promise<void> {
+  // Sequential on purpose: Resend rate-limits, and a re-slot can touch dozens of
+  // farmers at once. Throughput does not matter here; not dropping any does.
   for (const input of inputs) await notify(input);
 }
