@@ -6,3 +6,4 @@ dist/
 .DS_Store
 apps/api/prisma/certs/*.cer
 !apps/api/prisma/certs/README.md
+*.tsbuildinfo
