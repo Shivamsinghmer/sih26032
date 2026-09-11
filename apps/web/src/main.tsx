@@ -32,6 +32,21 @@ const queryClient = new QueryClient({
 const container = document.getElementById("root");
 if (!container) throw new Error("#root missing from index.html");
 
+/**
+ * Register the service worker.
+ *
+ * Production only: in development a cached shell makes every change look like
+ * it did not take, which costs far more time than the offline support saves.
+ */
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((error) => {
+      // Offline support is an enhancement; losing it must not break the app.
+      console.warn("service worker registration failed", error);
+    });
+  });
+}
+
 createRoot(container).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

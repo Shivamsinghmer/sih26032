@@ -18,17 +18,19 @@ import {
   useCentres, useCreateBooking, useFarmerDashboard, useFarmerLots, useQueueContext, useSlots,
 } from "../lib/hooks.js";
 import { useMe } from "../auth/session.js";
+import { useT } from "../lib/i18n.js";
 
 /* ------------------------------------------------------------------ dashboard */
 
 export function FarmerDashboard() {
   const me = useMe();
+  const { t } = useT();
   const { data, isPending, isError, error, refetch } = useFarmerDashboard();
 
   return (
     <Page>
       <PageHeader
-        title={`Namaste, ${me.farmer?.name ?? "farmer"}`}
+        title={t("dash.greeting", { name: me.farmer?.name ?? "" })}
         lede={[me.farmer?.village, me.farmer?.district].filter(Boolean).join(", ")}
       />
 
@@ -44,25 +46,23 @@ export function FarmerDashboard() {
 
       {/* Moisture guidance before travel, not after a rejected trip. */}
       <Card className="mt-4 border-0 bg-marigold">
-        <h2 className="text-heading-sm font-semibold">Before you load the trolley</h2>
-        <p className="mt-2 max-w-prose text-body">
-          Paddy is accepted up to <strong>17% moisture</strong>. Above that the lot is rejected and you
-          lose the slot — so dry the grain fully and check it before setting out.
-        </p>
+        <h2 className="text-heading-sm font-semibold">{t("dash.moistureTitle")}</h2>
+        <p className="mt-2 max-w-prose text-body">{t("dash.moistureBody")}</p>
       </Card>
     </Page>
   );
 }
 
 function NextBookingCard({ booking }: { booking: NextBookingDto | null }) {
+  const { t } = useT();
   if (!booking) {
     return (
       <Card>
-        <h2 className="text-heading-sm font-semibold">No slot booked</h2>
-        <p className="mt-2 text-body text-graphite">Book one when you are ready to sell.</p>
+        <h2 className="text-heading-sm font-semibold">{t("dash.noBooking")}</h2>
+        <p className="mt-2 text-body text-graphite">{t("dash.noBookingBody")}</p>
         <div className="mt-4">
           <Link to="/farmer/book">
-            <Button>Book a slot</Button>
+            <Button>{t("nav.book")}</Button>
           </Link>
         </div>
       </Card>
@@ -74,7 +74,7 @@ function NextBookingCard({ booking }: { booking: NextBookingDto | null }) {
   return (
     <Card className={moved ? "border-0 bg-marigold" : ""}>
       <div className="flex items-start justify-between gap-3">
-        <h2 className="text-heading-sm font-semibold">Your next slot</h2>
+        <h2 className="text-heading-sm font-semibold">{t("dash.nextSlot")}</h2>
         <BookingStatusPill status={booking.status} />
       </div>
 
@@ -90,12 +90,12 @@ function NextBookingCard({ booking }: { booking: NextBookingDto | null }) {
 
       <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2">
         <div>
-          <dt className="text-caption text-stone">Gate pass</dt>
+          <dt className="text-caption text-stone">{t("dash.gatePass")}</dt>
           <dd className="font-mono text-body font-medium">{booking.gatePassCode}</dd>
         </div>
         {booking.tokenNumber !== null && (
           <div>
-            <dt className="text-caption text-stone">Token</dt>
+            <dt className="text-caption text-stone">{t("dash.token")}</dt>
             <dd className="text-body font-medium">#{booking.tokenNumber}</dd>
           </div>
         )}
@@ -103,7 +103,7 @@ function NextBookingCard({ booking }: { booking: NextBookingDto | null }) {
 
       <div className="mt-4">
         <Link to="/farmer/queue">
-          <Button variant="ghost">See the queue</Button>
+          <Button variant="ghost">{t("dash.seeQueue")}</Button>
         </Link>
       </div>
     </Card>
@@ -111,13 +111,12 @@ function NextBookingCard({ booking }: { booking: NextBookingDto | null }) {
 }
 
 function LatestPaymentCard({ lot }: { lot: LotDto | null }) {
+  const { t } = useT();
   if (!lot) {
     return (
       <Card>
-        <h2 className="text-heading-sm font-semibold">No payment pending</h2>
-        <p className="mt-2 text-body text-graphite">
-          Once your lot is weighed and a J-form is issued, the 72-hour payment clock starts here.
-        </p>
+        <h2 className="text-heading-sm font-semibold">{t("dash.noPayment")}</h2>
+        <p className="mt-2 text-body text-graphite">{t("dash.noPaymentBody")}</p>
       </Card>
     );
   }
@@ -125,8 +124,8 @@ function LatestPaymentCard({ lot }: { lot: LotDto | null }) {
   return (
     <Card>
       <div className="flex items-start justify-between gap-3">
-        <h2 className="text-heading-sm font-semibold">Latest payment</h2>
-        {lot.breached && <Pill tone="bad">Overdue</Pill>}
+        <h2 className="text-heading-sm font-semibold">{t("dash.latestPayment")}</h2>
+        {lot.breached && <Pill tone="bad">{t("pay.overdue")}</Pill>}
       </div>
       <p className="mt-3 text-heading-sm font-semibold">{formatRupees(lot.amountPaise)}</p>
       <p className="text-body text-graphite">{lot.jFormNumber ?? "J-form not yet issued"}</p>
@@ -140,7 +139,7 @@ function LatestPaymentCard({ lot }: { lot: LotDto | null }) {
       </div>
       <div className="mt-4">
         <Link to="/farmer/payments">
-          <Button variant="ghost">All payments</Button>
+          <Button variant="ghost">{t("dash.allPayments")}</Button>
         </Link>
       </div>
     </Card>
@@ -150,20 +149,21 @@ function LatestPaymentCard({ lot }: { lot: LotDto | null }) {
 /* --------------------------------------------------------------------- queue */
 
 export function FarmerQueue() {
+  const { t } = useT();
   const { data, isPending, isError, error, refetch, isFetching } = useQueueContext();
 
   return (
     <Page>
       <PageHeader
-        title="Live queue"
-        lede="The wait is estimated from what this centre has actually processed today, so it corrects itself."
+        title={t("queue.title")}
+        lede={t("queue.lede")}
       />
 
       {isPending && <SkeletonCard lines={4} />}
       {isError && <ErrorNote error={error} onRetry={() => void refetch()} />}
 
       {data && !data.booking && (
-        <EmptyState title="No active booking" body="Book a slot to follow the queue on the day." />
+        <EmptyState title={t("queue.noBooking")} body={t("queue.noBookingBody")} />
       )}
 
       {data?.booking && data.queue && (
@@ -171,7 +171,7 @@ export function FarmerQueue() {
           <Card className="md:col-span-2">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-caption text-stone">Your token</p>
+                <p className="text-caption text-stone">{t("queue.yourToken")}</p>
                 <p className="text-display-sm font-semibold tracking-[-0.035em]">
                   {data.booking.tokenNumber !== null ? `#${data.booking.tokenNumber}` : "—"}
                 </p>
@@ -180,9 +180,9 @@ export function FarmerQueue() {
             </div>
 
             <dl className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
-              <Stat label="Now serving" value={data.queue.nowServingToken !== null ? `#${data.queue.nowServingToken}` : "Not started"} />
-              <Stat label="Ahead of you" value={String(data.queue.ahead)} />
-              <Stat label="Estimated wait" value={formatMinutes(data.queue.etaMinutes)} />
+              <Stat label={t("queue.nowServing")} value={data.queue.nowServingToken !== null ? `#${data.queue.nowServingToken}` : t("queue.notStarted")} />
+              <Stat label={t("queue.ahead")} value={String(data.queue.ahead)} />
+              <Stat label={t("queue.eta")} value={formatMinutes(data.queue.etaMinutes)} />
             </dl>
 
             <p className="mt-6 text-body-sm text-stone">
@@ -194,7 +194,7 @@ export function FarmerQueue() {
           </Card>
 
           <Card>
-            <h2 className="text-heading-sm font-semibold">Gate pass</h2>
+            <h2 className="text-heading-sm font-semibold">{t("dash.gatePass")}</h2>
             <p className="mt-2 font-mono text-heading-sm font-semibold">{data.booking.gatePassCode}</p>
             <p className="mt-2 text-body-sm text-graphite">
               Show this at the gate. {data.booking.centre.name}, {formatDateTime(data.booking.slotStart)}.
@@ -218,20 +218,21 @@ function Stat({ label, value }: { label: string; value: string }) {
 /* ------------------------------------------------------------------ payments */
 
 export function FarmerPayments() {
+  const { t } = useT();
   const { data, isPending, isError, error, refetch } = useFarmerLots();
 
   return (
     <Page>
       <PageHeader
-        title="Payments"
-        lede="Every stage is recorded from what actually happened, and each carries the office accountable for it."
+        title={t("pay.title")}
+        lede={t("pay.lede")}
       />
 
       {isPending && <div className="space-y-4"><SkeletonCard /><SkeletonCard /></div>}
       {isError && <ErrorNote error={error} onRetry={() => void refetch()} />}
 
       {data?.length === 0 && (
-        <EmptyState title="Nothing sold yet" body="Payments appear here once a lot has been weighed and a J-form issued." />
+        <EmptyState title={t("pay.none")} body={t("pay.noneBody")} />
       )}
 
       <div className="space-y-4">
@@ -246,7 +247,7 @@ export function FarmerPayments() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {lot.breached && <Pill tone="bad">Overdue</Pill>}
+                {lot.breached && <Pill tone="bad">{t("pay.overdue")}</Pill>}
                 <Pill tone="neutral">{stageLabel(lot.stage)}</Pill>
               </div>
             </div>
@@ -303,6 +304,7 @@ export function FarmerPayments() {
 /* ------------------------------------------------------------------- booking */
 
 export function FarmerBook() {
+  const { t } = useT();
   const centres = useCentres();
   const [centreId, setCentreId] = useState<string | null>(null);
   const [day, setDay] = useState<SlotDay | null>(null);
@@ -331,17 +333,14 @@ export function FarmerBook() {
   if (create.isSuccess) {
     return (
       <Page>
-        <PageHeader title="Slot confirmed" />
+        <PageHeader title={t("book.confirmed")} />
         <Card className="border-0 bg-sky-tint">
-          <p className="text-body">Your gate pass is</p>
+          <p className="text-body">{t("book.yourPass")}</p>
           <p className="mt-1 font-mono text-heading-sm font-semibold">{create.data.booking.gatePassCode}</p>
-          <p className="mt-3 text-body text-graphite">
-            We have sent you the details. If capacity at the centre changes before your slot, you will be
-            told and moved — <strong>before</strong> you travel.
-          </p>
+          <p className="mt-3 text-body text-graphite">{t("book.willTell")}</p>
           <div className="mt-4 flex gap-2">
-            <Link to="/farmer"><Button>Back to dashboard</Button></Link>
-            <Link to="/farmer/queue"><Button variant="ghost">See the queue</Button></Link>
+            <Link to="/farmer"><Button>{t("common.back")}</Button></Link>
+            <Link to="/farmer/queue"><Button variant="ghost">{t("dash.seeQueue")}</Button></Link>
           </div>
         </Card>
       </Page>
@@ -351,13 +350,13 @@ export function FarmerBook() {
   return (
     <Page>
       <PageHeader
-        title="Book a slot"
-        lede="Only days the centre can actually handle are offered. A day that cannot take your quantity is not shown."
+        title={t("book.title")}
+        lede={t("book.lede")}
       />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <h2 className="text-heading-sm font-semibold">1 · Choose a centre</h2>
+          <h2 className="text-heading-sm font-semibold">{t("book.step1")}</h2>
           {centres.isPending && <p className="mt-3 text-body text-stone">Loading centres…</p>}
           {centres.isError && <p className="mt-3 text-body text-vermillion">{centres.error.message}</p>}
           <div className="mt-3 space-y-2">
@@ -378,7 +377,7 @@ export function FarmerBook() {
         </Card>
 
         <Card>
-          <h2 className="text-heading-sm font-semibold">2 · Choose a day</h2>
+          <h2 className="text-heading-sm font-semibold">{t("book.step2")}</h2>
 
           {!centreId && <p className="mt-3 text-body text-stone">Choose a centre first.</p>}
           {centreId && slots.isPending && <p className="mt-3 text-body text-stone">Checking what each day can take…</p>}
@@ -403,12 +402,12 @@ export function FarmerBook() {
               >
                 <span className="flex items-baseline justify-between gap-3">
                   <span className="text-body font-medium">{formatDate(d.date)}</span>
-                  <span className="text-body-sm text-stone">{formatQuintals(d.remainingQuintals)} left</span>
+                  <span className="text-body-sm text-stone">{t("book.left", { qty: formatQuintals(d.remainingQuintals) })}</span>
                 </span>
                 {/* Naming the constraint is what makes a small number credible. */}
                 {d.bindingConstraint && (
                   <span className="mt-1 block text-caption text-stone">
-                    Limited today by {d.bindingConstraint.toLowerCase()}
+                    {t("book.limitedBy", { what: d.bindingConstraint.toLowerCase() })}
                   </span>
                 )}
               </button>
@@ -418,11 +417,11 @@ export function FarmerBook() {
       </div>
 
       <Card className="mt-4">
-        <h2 className="text-heading-sm font-semibold">3 · How much are you bringing?</h2>
+        <h2 className="text-heading-sm font-semibold">{t("book.step3")}</h2>
 
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <label className="block">
-            <span className="block text-caption text-stone">Quantity in quintals</span>
+            <span className="block text-caption text-stone">{t("book.quantity")}</span>
             <input
               type="number"
               inputMode="decimal"
@@ -435,7 +434,7 @@ export function FarmerBook() {
             />
           </label>
           <Button onClick={submit} disabled={!fits || create.isPending}>
-            {create.isPending ? "Booking…" : "Confirm booking"}
+            {create.isPending ? t("book.booking") : t("book.confirm")}
           </Button>
         </div>
 

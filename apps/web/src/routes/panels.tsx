@@ -8,13 +8,18 @@ import { PanelNav, type NavItem } from "../components/panel-nav.js";
 import { Page, PageHeader } from "../components/page.js";
 import { useMe, RequireRole, RequireFarmerGates } from "../auth/session.js";
 import { RealtimeProvider } from "../lib/realtime.js";
+import { I18nProvider, useT } from "../lib/i18n.js";
 
-const FARMER_NAV: NavItem[] = [
-  { to: "/farmer", label: "Dashboard" },
-  { to: "/farmer/book", label: "Book a slot" },
-  { to: "/farmer/queue", label: "Queue" },
-  { to: "/farmer/payments", label: "Payments" },
-];
+/** Farmer nav labels are translated; the officer and admin panels stay English. */
+function useFarmerNav(): NavItem[] {
+  const { t } = useT();
+  return [
+    { to: "/farmer", label: t("nav.dashboard") },
+    { to: "/farmer/book", label: t("nav.book") },
+    { to: "/farmer/queue", label: t("nav.queue") },
+    { to: "/farmer/payments", label: t("nav.payments") },
+  ];
+}
 
 const CENTRE_NAV: NavItem[] = [
   { to: "/centre", label: "Today" },
@@ -27,23 +32,29 @@ const ADMIN_NAV: NavItem[] = [
   { to: "/admin/escalations", label: "Escalations" },
 ];
 
-function Shell({ items }: { items: NavItem[] }) {
+function Shell({ items, showLanguage = false }: { items: NavItem[]; showLanguage?: boolean }) {
   const me = useMe();
   // Inside the session guard, so the socket only ever connects once we know who
   // the user is and which rooms are theirs to ask for.
   return (
     <RealtimeProvider>
-      <PanelNav me={me} items={items} />
+      <PanelNav me={me} items={items} showLanguage={showLanguage} />
       <Outlet />
     </RealtimeProvider>
   );
+}
+
+function FarmerShell() {
+  return <Shell items={useFarmerNav()} showLanguage />;
 }
 
 export function FarmerLayout() {
   return (
     <RequireRole allow={["farmer"]}>
       <RequireFarmerGates>
-        <Shell items={FARMER_NAV} />
+        <I18nProvider>
+          <FarmerShell />
+        </I18nProvider>
       </RequireFarmerGates>
     </RequireRole>
   );

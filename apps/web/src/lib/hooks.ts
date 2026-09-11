@@ -22,6 +22,7 @@ import type {
   SlotsResponse,
 } from "@mandi/shared";
 import { apiGet, apiPatch, apiPost, type ApiRequestError } from "./api.js";
+import type { Locale } from "@mandi/shared";
 
 export function useFarmerDashboard() {
   return useQuery<FarmerDashboard, ApiRequestError>({
@@ -169,5 +170,58 @@ export function useEscalations() {
   return useQuery<EscalationRow[], ApiRequestError>({
     queryKey: ["admin", "escalations"],
     queryFn: ({ signal }) => apiGet<EscalationRow[]>("/admin/escalations", undefined, signal),
+  });
+}
+
+/* ------------------------------------------------------------- onboarding */
+
+export interface OnboardingInput {
+  name: string;
+  village: string;
+  district: string;
+  state: string;
+  preferredLocale: Locale;
+  email?: string;
+  landAcres?: number;
+}
+
+export function useOnboard() {
+  const queryClient = useQueryClient();
+  return useMutation<{ farmer: unknown }, ApiRequestError, OnboardingInput>({
+    mutationFn: (body) => apiPost("/onboarding", body),
+    // /me now reports a role and a profile, and the guard reads /me.
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["me"] }),
+  });
+}
+
+export interface AadhaarResult {
+  signatureVerified: boolean;
+  certificateFile: string | null;
+  message: string;
+  identity: {
+    name: string; dateOfBirth: string; gender: string;
+    district: string; state: string; pincode: string;
+    aadhaarLast4: string; issuedAt: string | null;
+  };
+  checks: { mobileHashPresent: boolean; mobileMatchesRegisteredPhone: boolean | null };
+}
+
+export function useVerifyAadhaar() {
+  const queryClient = useQueryClient();
+  return useMutation<AadhaarResult, ApiRequestError, { qrPayload: string }>({
+    mutationFn: (body) => apiPost("/verify/aadhaar", body),
+    onSuccess: (result) => {
+      // Only a verified signature changes the gate, so only then is /me stale.
+      if (result.signatureVerified) void queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+  });
+}
+
+/** Changes which language notifications and the UI use. */
+export function useSetLocale() {
+  const queryClient = useQueryClient();
+  return useMutation<{ preferredLocale: Locale }, ApiRequestError, Locale>({
+    mutationFn: (locale) => apiPatch("/farmer/locale", { preferredLocale: locale }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["me"] }),
   });
 }

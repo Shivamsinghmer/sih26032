@@ -10,12 +10,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import {
-  computeCapacity, allocate, type Constraint, type QueueBookingDto, type CapacityDayDto,
+  computeCapacity, allocate, type Constraint, type QueueBookingDto,
 } from "@mandi/shared";
 import { Page, PageHeader, Card } from "../components/page.js";
 import {
   Button, BookingStatusPill, EmptyState, ErrorNote, Pill, SkeletonCard,
-  formatDateTime, formatQuintals, formatRupees, formatTime, stageLabel,
+  formatQuintals, formatRupees, formatTime, stageLabel,
 } from "../components/ui.js";
 import {
   useAdvanceQueue, useCentreCapacity, useCentreQueue, useCentreToday, usePublishCapacity, useRecordLot,

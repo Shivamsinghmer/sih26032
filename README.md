@@ -54,7 +54,8 @@ too many. It is a pure function of plain numbers with no imports, which also
 makes it trivial to unit-test and to replay an arrival profile through.
 
 ```bash
-npm test -w @mandi/shared    # 29 tests — engine, allocator, payment stages
+npm run replay -w @mandi/shared   # fixed quota vs capacity-aware, measured
+npm test -w @mandi/shared    # 35 tests — engine, allocator, payment stages, replay
 npm test -w @mandi/api       # 15 tests — Aadhaar Secure QR
 npm run test:qr -w @mandi/api    # pipeline self-test; --emit prints a sample payload
 ```
@@ -103,11 +104,37 @@ to admin.
 | 5a · `apps/web` — farmer panel: dashboard, booking, live queue, payments | done |
 | 5b · `apps/web` — centre officer and district admin panels | done |
 | 6 · Socket.IO — authenticated handshake, room authorisation, polling fallback | done |
-| 7 · PWA — manifest, icons, offline shell | next |
-| 8 · Replay harness — the measured fixed-quota comparison | planned |
+| 7 · PWA — manifest, icons, hand-written service worker, offline gate pass | done |
+| 8 · Replay harness — the measured fixed-quota comparison | done |
 
 Each step leaves something runnable, so nobody is blocked on a half-finished
 layer.
+
+## Does it actually reduce waiting?
+
+The problem statement's fifth ask is measurable, so it is measured rather than
+asserted. `npm run replay -w @mandi/shared` runs one peak-harvest week through
+two schedulers — today's flat daily quota, and this one — and prints the
+difference. The centre in the scenario loses most of its gunny bags and trucks
+on the Wednesday.
+
+| | Fixed daily quota | Capacity-aware |
+|---|---|---|
+| Wasted journeys | 54 | **17** |
+| Slot honour rate | 87.1% | **100%** |
+| Mean dwell | 1.54 h | **0 h** |
+| Peak yard | 4,200 qtl | **3,914 qtl** |
+| Quintals bought | 10,680 | 10,509 |
+
+The Wednesday is the whole argument: the flat quota offers 2,200 quintals at a
+centre that can process 600, and 2,284 quintals end up stranded in the yard. The
+capacity-aware scheduler offers 587 and tells everyone else before they travel.
+
+Read it honestly, and say so before a panel does: **this is a simulation with
+declared assumptions, not field data.** Every input is in `ReplayScenario` to be
+challenged, and it is deterministic so any number here can be reproduced. Note
+also that the capacity-aware run buys marginally *less* grain across the week,
+because it holds a 10% standby reserve — that trade is deliberate, not hidden.
 
 ## What is real and what is stubbed
 

@@ -8,8 +8,13 @@ import tailwindcss from "@tailwindcss/vite";
  * Vite 8.3.0 builds with Rolldown, and its own default output config passes an
  * object for `manualChunks` where Rolldown requires a function — so `vite build`
  * fails with "manualChunks is not a function" on a completely empty config, with
- * or without plugins. Nothing in this repo can work around it. Revisit when the
- * Vite/Rolldown pairing settles.
+ * or without plugins. Revisit when the Vite/Rolldown pairing settles.
+ *
+ * The PWA is hand-written in `public/sw.js` rather than generated.
+ * vite-plugin-pwa@1.3.0 is inert against Vite 7.3.6 — it resolves into the
+ * plugin list and emits no service worker, no manifest and no error, on a
+ * minimal config as well as ours. Writing it by hand also makes the decision
+ * that actually matters explicit: which endpoints must NEVER be served stale.
  */
 export default defineConfig({
   plugins: [react(), tailwindcss()],

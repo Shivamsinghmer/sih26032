@@ -15,6 +15,7 @@ import {
   estimateWaitMinutes,
   paymentStatus,
   CROPS,
+  LOCALES,
 } from "@mandi/shared";
 import { prisma } from "../db.js";
 import { withSession, sessionOf } from "../auth/require-role.js";
@@ -22,7 +23,7 @@ import { farmerOf, verifiedFarmerOf } from "../auth/identity.js";
 import { parseBody, parseQuery } from "../http/validate.js";
 import { HttpError, notFound } from "../http/errors.js";
 import { startOfDayUtc, endOfDayUtc, parseDateOnly, today } from "../lib/dates.js";
-import { notify, formatPaise } from "../lib/notifications.js";
+import { notify } from "../lib/notifications.js";
 import { activeSeason } from "../lib/season.js";
 
 export const farmerRouter: Router = Router();
@@ -371,6 +372,28 @@ farmerRouter.post("/bookings", withSession, async (req, res) => {
   });
 
   res.status(201).json({ booking });
+});
+
+const localeSchema = z.object({ preferredLocale: z.enum(LOCALES) });
+
+/**
+ * Changes the farmer's language.
+ *
+ * It drives which notification template renders, so this is not a cosmetic
+ * client-side toggle — the choice has to reach the server or the SMS keeps
+ * arriving in a language the farmer cannot read.
+ */
+farmerRouter.patch("/farmer/locale", withSession, async (req, res) => {
+  const farmer = await farmerOf(sessionOf(req));
+  const body = parseBody(localeSchema, req);
+
+  const updated = await prisma.farmer.update({
+    where: { id: farmer.id },
+    data: { preferredLocale: body.preferredLocale },
+    select: { preferredLocale: true },
+  });
+
+  res.json(updated);
 });
 
 /** Cancelling frees the quantity back to the day. */

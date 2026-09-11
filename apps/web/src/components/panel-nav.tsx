@@ -9,13 +9,14 @@
 import { NavLink } from "react-router";
 import type { MeResponse } from "@mandi/shared";
 import { ConnectionBadge } from "../lib/realtime.js";
+import { LanguageToggle } from "./language-toggle.js";
 
 export interface NavItem {
   to: string;
   label: string;
 }
 
-export function PanelNav({ me, items }: { me: MeResponse; items: NavItem[] }) {
+export function PanelNav({ me, items, showLanguage = false }: { me: MeResponse; items: NavItem[]; showLanguage?: boolean }) {
   return (
     <header className="sticky top-0 z-10 h-16 border-b border-hairline bg-pure-white/95 backdrop-blur">
       <nav className="mx-auto flex h-16 max-w-[1440px] items-center gap-1 px-6">
@@ -40,6 +41,7 @@ export function PanelNav({ me, items }: { me: MeResponse; items: NavItem[] }) {
         ))}
 
         <div className="ml-auto flex items-center gap-3">
+          {showLanguage && <LanguageToggle />}
           <ConnectionBadge />
           {me.demoMode && (
             <span

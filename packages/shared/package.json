@@ -18,7 +18,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test src/**/*.test.ts",
+    "replay": "tsx scripts/replay.ts"
   },
   "devDependencies": {
     "typescript": "5.9.2",
