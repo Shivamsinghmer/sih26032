@@ -5,7 +5,7 @@
 
 import { Outlet } from "react-router";
 import { PanelNav, type NavItem } from "../components/panel-nav.js";
-import { Page, PageHeader, NotBuiltYet } from "../components/page.js";
+import { Page, PageHeader } from "../components/page.js";
 import { useMe, RequireRole, RequireFarmerGates } from "../auth/session.js";
 
 const FARMER_NAV: NavItem[] = [
@@ -59,34 +59,6 @@ export function AdminLayout() {
     <RequireRole allow={["admin"]}>
       <Shell items={ADMIN_NAV} />
     </RequireRole>
-  );
-}
-
-export function CentreHome() {
-  const me = useMe();
-  return (
-    <Page>
-      <PageHeader
-        title={me.officer?.centreName ?? "Procurement centre"}
-        lede="Today's capacity, the queue, and anything overdue at this centre."
-      />
-      <div className="grid gap-4 md:grid-cols-2">
-        <NotBuiltYet what="Today at this centre" endpoint="GET /centres/:id/today" />
-        <NotBuiltYet what="Capacity for tomorrow" endpoint="POST /centres/:id/capacity" />
-      </div>
-    </Page>
-  );
-}
-
-export function AdminHome() {
-  return (
-    <Page>
-      <PageHeader title="District overview" lede="Every centre, and what is overdue across all of them." />
-      <div className="grid gap-4 md:grid-cols-2">
-        <NotBuiltYet what="Centre KPIs" endpoint="GET /admin/overview" />
-        <NotBuiltYet what="Escalation queue" endpoint="GET /admin/escalations" />
-      </div>
-    </Page>
   );
 }
 

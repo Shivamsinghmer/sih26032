@@ -5,14 +5,23 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  AdminOverview,
+  CentreCapacityScreen,
   CentreListItem,
+  CentreQueue,
+  CentreToday,
   CreateBookingRequest,
+  EscalationRow,
   FarmerDashboard,
   LotDto,
+  PublishCapacityRequest,
+  PublishCapacityResponse,
+  QueueAction,
   QueueContext,
+  RecordLotRequest,
   SlotsResponse,
 } from "@mandi/shared";
-import { apiGet, apiPost, type ApiRequestError } from "./api.js";
+import { apiGet, apiPatch, apiPost, type ApiRequestError } from "./api.js";
 
 export function useFarmerDashboard() {
   return useQuery<FarmerDashboard, ApiRequestError>({
@@ -74,5 +83,91 @@ export function useCreateBooking() {
       void queryClient.invalidateQueries({ queryKey: ["slots"] });
       void queryClient.invalidateQueries({ queryKey: ["farmer"] });
     },
+  });
+}
+
+/* ------------------------------------------------------------ centre officer */
+
+export function useCentreToday(centreId: string | null) {
+  return useQuery<CentreToday, ApiRequestError>({
+    queryKey: ["centre", centreId, "today"],
+    queryFn: ({ signal }) => apiGet<CentreToday>(`/centres/${centreId}/today`, undefined, signal),
+    enabled: Boolean(centreId),
+  });
+}
+
+export function useCentreCapacity(centreId: string | null, date: string | null) {
+  return useQuery<CentreCapacityScreen, ApiRequestError>({
+    queryKey: ["centre", centreId, "capacity", date],
+    queryFn: ({ signal }) =>
+      apiGet<CentreCapacityScreen>(`/centres/${centreId}/capacity`, date ? { date } : undefined, signal),
+    enabled: Boolean(centreId),
+  });
+}
+
+export function usePublishCapacity(centreId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation<PublishCapacityResponse, ApiRequestError, PublishCapacityRequest>({
+    mutationFn: (body) => apiPost<PublishCapacityResponse>(`/centres/${centreId}/capacity`, body),
+    onSuccess: () => {
+      // Publishing may have re-slotted people, so the board and the day list
+      // are both stale now.
+      void queryClient.invalidateQueries({ queryKey: ["centre"] });
+      void queryClient.invalidateQueries({ queryKey: ["slots"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin"] });
+    },
+  });
+}
+
+export function useCentreQueue(centreId: string | null) {
+  return useQuery<CentreQueue, ApiRequestError>({
+    queryKey: ["centre", centreId, "queue"],
+    queryFn: ({ signal }) => apiGet<CentreQueue>(`/centres/${centreId}/queue`, undefined, signal),
+    enabled: Boolean(centreId),
+    // The officer works this screen all day; it must not go stale behind them.
+    refetchInterval: 15_000,
+  });
+}
+
+export function useAdvanceQueue() {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, ApiRequestError, { bookingId: string; action: QueueAction }>({
+    mutationFn: (body) => apiPost("/queue/advance", body),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["centre"] }),
+  });
+}
+
+export function useRecordLot() {
+  const queryClient = useQueryClient();
+  return useMutation<{ qualityPass: boolean; reslotted: boolean }, ApiRequestError, RecordLotRequest>({
+    mutationFn: (body) => apiPost("/lots", body),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["centre"] }),
+  });
+}
+
+export function useAdvanceStage() {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, ApiRequestError, { lotId: string; stage: string }>({
+    mutationFn: ({ lotId, stage }) => apiPatch(`/lots/${lotId}/stage`, { stage }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["centre"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin"] });
+    },
+  });
+}
+
+/* ------------------------------------------------------------ district admin */
+
+export function useAdminOverview() {
+  return useQuery<AdminOverview, ApiRequestError>({
+    queryKey: ["admin", "overview"],
+    queryFn: ({ signal }) => apiGet<AdminOverview>("/admin/overview", undefined, signal),
+  });
+}
+
+export function useEscalations() {
+  return useQuery<EscalationRow[], ApiRequestError>({
+    queryKey: ["admin", "escalations"],
+    queryFn: ({ signal }) => apiGet<EscalationRow[]>("/admin/escalations", undefined, signal),
   });
 }

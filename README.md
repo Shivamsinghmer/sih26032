@@ -101,8 +101,8 @@ to admin.
 | 3c · `apps/api` — Aadhaar Secure QR verification — 15 unit tests | done |
 | 4 · `apps/web` — Vite shell, Clerk provider, `/me` guard | done |
 | 5a · `apps/web` — farmer panel: dashboard, booking, live queue, payments | done |
-| 5b · `apps/web` — centre officer and district admin panels | next |
-| 6 · Socket.IO, with an authenticated handshake | not started |
+| 5b · `apps/web` — centre officer and district admin panels | done |
+| 6 · Socket.IO, with an authenticated handshake | next |
 | 7 · PWA — manifest, icons, service worker | not started |
 
 Each step leaves something runnable, so nobody is blocked on a half-finished

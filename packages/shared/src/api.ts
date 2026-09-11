@@ -7,7 +7,7 @@
  *   quantities  quintals, number, one decimal place.
  */
 
-import type { BookingStatus, Constraint, Crop, Locale, PaymentStage, Role } from "./domain.js";
+import type { BookingStatus, CapacityStatus, Constraint, Crop, Locale, PaymentStage, Role } from "./domain.js";
 
 export const API_PREFIX = "/api/v1";
 
@@ -178,4 +178,170 @@ export interface CreateBookingRequest {
   slotStart: string;
   quantityQuintals: number;
   crop: Crop;
+}
+
+// ---------------------------------------------------------------------------
+// Centre officer panel
+// ---------------------------------------------------------------------------
+
+export interface CapacityDayDto {
+  id: string;
+  date: string;
+  bardanaBags: number;
+  labourGangs: number;
+  trucksAssigned: number;
+  weighbridgeHours: number;
+  openingBacklogQuintals: number;
+  computedQuintals: number | null;
+  bindingConstraint: Constraint | null;
+  /** The engine's four lines, so the officer screen can draw one scale. */
+  breakdown: { constraint: Constraint; quintals: number; detail: string }[] | null;
+  approvedQuintals: number | null;
+  status: CapacityStatus;
+  publishedAt: string | null;
+}
+
+export interface CentreDto {
+  id: string;
+  name: string;
+  code: string;
+  village: string;
+  district: string;
+  state: string;
+  weighbridgeCount: number;
+  openHour: number;
+  closeHour: number;
+  yardCapacityQuintals: number;
+}
+
+export interface QueueBookingDto {
+  id: string;
+  tokenNumber: number | null;
+  slotStart: string;
+  slotEnd: string;
+  status: BookingStatus;
+  quantityQuintals: number;
+  gatePassCode: string;
+  reslotReason: string | null;
+  arrivedAt: string | null;
+  farmer: { id: string; name: string; village: string; phone: string };
+}
+
+export interface BreachedLotDto {
+  id: string;
+  farmerName: string;
+  village: string;
+  stage: PaymentStage;
+  owner: string;
+  breached: boolean;
+  hoursOverdue: number;
+  amountPaise: string | null;
+}
+
+export interface CentreToday {
+  centre: CentreDto;
+  capacityDay: CapacityDayDto | null;
+  bookingsToday: QueueBookingDto[];
+  breachedLots: BreachedLotDto[];
+  awaitingLift: number;
+}
+
+export interface CentreCapacityScreen {
+  centre: CentreDto;
+  date: string;
+  capacityDay: CapacityDayDto | null;
+  /** What is already committed on that day, so a cut's cost is visible first. */
+  booked: { quintals: number; bookings: number };
+}
+
+export interface PublishCapacityRequest {
+  date: string;
+  bardanaBags: number;
+  labourGangs: number;
+  trucksAssigned: number;
+  weighbridgeHours: number;
+  openingBacklogQuintals: number;
+  approvedQuintals?: number;
+  publish: boolean;
+}
+
+export interface PublishCapacityResponse {
+  sellableQuintals: number;
+  bindingConstraint: Constraint;
+  breakdown: { constraint: Constraint; quintals: number; detail: string }[];
+  explanation: string;
+  capacityDay: CapacityDayDto;
+  offeredQuintals?: number;
+  keptQuintals?: number;
+  /** Every entry fires a notification. The officer sees exactly who was moved. */
+  reslotted: { bookingId: string; farmerId: string; farmerName: string }[];
+  published: boolean;
+}
+
+export interface CentreQueue {
+  centre: CentreDto;
+  bookings: QueueBookingDto[];
+  stats: {
+    total: number;
+    served: number;
+    waiting: number;
+    inProgress: number;
+    noShow: number;
+    observedMinutesPerLot: number | null;
+  };
+}
+
+export type QueueAction = "ARRIVE" | "START" | "COMPLETE" | "NO_SHOW";
+
+export interface RecordLotRequest {
+  bookingId: string;
+  moisturePercent: number;
+  netQuintals: number;
+  crop: Crop;
+}
+
+// ---------------------------------------------------------------------------
+// District admin panel
+// ---------------------------------------------------------------------------
+
+export interface AdminCentreRow {
+  centre: { id: string; name: string; code: string; village: string };
+  /** Null capacity means the officer has not entered today — itself the finding. */
+  published: boolean;
+  sellableQuintals: number | null;
+  bindingConstraint: Constraint | null;
+  bookingsToday: number;
+  servedToday: number;
+  breachedLots: number;
+  awaitingLift: number;
+}
+
+export interface AdminOverview {
+  date: string;
+  kpis: {
+    centres: number;
+    farmers: number;
+    breachedLots: number;
+    centresNotPublished: number;
+    bookingsToday: number;
+    servedToday: number;
+  };
+  centres: AdminCentreRow[];
+  /** Which resource limited this district most often — the tendering question. */
+  constraintHistory: { constraint: Constraint | null; days: number }[];
+}
+
+export interface EscalationRow {
+  lotId: string;
+  farmer: { name: string; phone: string; village: string };
+  centre: { id: string; name: string };
+  jFormNumber: string | null;
+  jFormIssuedAt: string | null;
+  amountPaise: string | null;
+  stage: PaymentStage;
+  /** An escalation without a named office is just a complaint. */
+  owner: string;
+  breached: boolean;
+  hoursOverdue: number;
+  slaDueAt: string | null;
 }

@@ -10,13 +10,10 @@ import { RequireSession } from "./auth/session.js";
 import { Landing } from "./routes/landing.js";
 import { SignInPage, SignUpPage } from "./routes/auth-pages.js";
 import { OnboardingLayout, OnboardingProfile, OnboardingVerify } from "./routes/onboarding.js";
-import {
-  FarmerLayout,
-  CentreLayout, CentreHome,
-  AdminLayout, AdminHome,
-  NotFound,
-} from "./routes/panels.js";
+import { FarmerLayout, CentreLayout, AdminLayout, NotFound } from "./routes/panels.js";
 import { FarmerDashboard, FarmerBook, FarmerQueue, FarmerPayments } from "./routes/farmer.js";
+import { CentreToday, CentreCapacity, CentreQueueBoard } from "./routes/centre.js";
+import { AdminOverviewScreen, AdminEscalations } from "./routes/admin.js";
 
 /** Everything below this resolves /me once and shares it. */
 function SessionBoundary() {
@@ -57,12 +54,19 @@ export const router = createBrowserRouter([
       {
         path: "/centre",
         element: <CentreLayout />,
-        children: [{ index: true, element: <CentreHome /> }],
+        children: [
+          { index: true, element: <CentreToday /> },
+          { path: "capacity", element: <CentreCapacity /> },
+          { path: "queue", element: <CentreQueueBoard /> },
+        ],
       },
       {
         path: "/admin",
         element: <AdminLayout />,
-        children: [{ index: true, element: <AdminHome /> }],
+        children: [
+          { index: true, element: <AdminOverviewScreen /> },
+          { path: "escalations", element: <AdminEscalations /> },
+        ],
       },
     ],
   },

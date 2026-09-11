@@ -19,19 +19,3 @@ export function PageHeader({ title, lede }: { title: string; lede?: string }) {
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <section className={`surface-card p-card ${className}`}>{children}</section>;
 }
-
-/**
- * Stands in for a panel that step 5 will build. Named honestly rather than
- * rendered as fake data, so nobody demos a screen that does nothing.
- */
-export function NotBuiltYet({ what, endpoint }: { what: string; endpoint: string }) {
-  return (
-    <Card className="border-dashed">
-      <h2 className="text-heading-sm font-semibold">{what}</h2>
-      <p className="mt-2 text-body text-graphite">
-        Not built yet. The API endpoint it will read is{" "}
-        <code className="rounded-small bg-paper-warmth px-1.5 py-0.5 text-body-sm">{endpoint}</code>.
-      </p>
-    </Card>
-  );
-}
