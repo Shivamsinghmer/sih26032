@@ -42,9 +42,20 @@ mandi-queue/
 └── docs/         The specification this is built from
 ```
 
-`packages/shared` carries the API response shapes, the domain vocabulary and the
-Socket.IO event contract. Both services import it, so a rename breaks the build
-instead of production.
+`packages/shared` carries the API response shapes, the domain vocabulary, the
+Socket.IO event contract — and the capacity engine. Both services import it, so
+a rename breaks the build instead of production.
+
+The engine lives there rather than in the API because it runs **twice**, on
+purpose: in the browser as the officer types, so the effect of one more truck is
+visible before anything is saved, and on the server as the authority that writes
+`CapacityDay` and triggers re-slotting. Two implementations of that would be one
+too many. It is a pure function of plain numbers with no imports, which also
+makes it trivial to unit-test and to replay an arrival profile through.
+
+```bash
+npm test -w @mandi/shared
+```
 
 ## Getting started
 
@@ -80,7 +91,8 @@ browser decided, anyone could flip it in devtools.
 |---|---|
 | 1 · `packages/shared` — types and the socket contract | done |
 | 2 · `apps/api` — Prisma schema, `GET /health`, `GET /me` | done |
-| 3 · `apps/api` — capacity engine, slot allocator, payment stages, the rest of the REST contract | next |
+| 3a · capacity engine, slot allocator, payment stages, seed — 29 unit tests | done |
+| 3b · `apps/api` — the rest of the REST contract in [API.md](./docs/API.md) | next |
 | 4 · `apps/web` — Vite shell, Clerk provider, `/me` guard | not started |
 | 5 · `apps/web` — the three panels, farmer first | not started |
 | 6 · Socket.IO, with an authenticated handshake | not started |
