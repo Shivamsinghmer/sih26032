@@ -15,6 +15,7 @@ import { errorHandler, notFoundHandler } from "./http/error-handler.js";
 import { healthRouter } from "./routes/health.js";
 import { meRouter } from "./routes/me.js";
 import { onboardingRouter } from "./routes/onboarding.js";
+import { verifyRouter } from "./routes/verify.js";
 import { farmerRouter } from "./routes/farmer.js";
 import { centreRouter } from "./routes/centre.js";
 import { adminRouter } from "./routes/admin.js";
@@ -71,6 +72,7 @@ export function createApp(): Express {
   const v1 = express.Router();
   v1.use(meRouter);
   v1.use(onboardingRouter);
+  v1.use(verifyRouter);
   v1.use(farmerRouter);
   v1.use(centreRouter);
   v1.use(adminRouter);

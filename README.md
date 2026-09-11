@@ -54,7 +54,9 @@ too many. It is a pure function of plain numbers with no imports, which also
 makes it trivial to unit-test and to replay an arrival profile through.
 
 ```bash
-npm test -w @mandi/shared
+npm test -w @mandi/shared    # 29 tests — engine, allocator, payment stages
+npm test -w @mandi/api       # 15 tests — Aadhaar Secure QR
+npm run test:qr -w @mandi/api    # pipeline self-test; --emit prints a sample payload
 ```
 
 ## Getting started
@@ -96,8 +98,8 @@ to admin.
 | 2 · `apps/api` — Prisma schema, `GET /health`, `GET /me` | done |
 | 3a · capacity engine, slot allocator, payment stages, seed — 29 unit tests | done |
 | 3b · `apps/api` — the REST contract in [API.md](./docs/API.md), all endpoints | done |
-| 3c · `apps/api` — Aadhaar Secure QR verification | next |
-| 4 · `apps/web` — Vite shell, Clerk provider, `/me` guard | not started |
+| 3c · `apps/api` — Aadhaar Secure QR verification — 15 unit tests | done |
+| 4 · `apps/web` — Vite shell, Clerk provider, `/me` guard | next |
 | 5 · `apps/web` — the three panels, farmer first | not started |
 | 6 · Socket.IO, with an authenticated handshake | not started |
 | 7 · PWA — manifest, icons, service worker | not started |
