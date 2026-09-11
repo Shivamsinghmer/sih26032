@@ -14,6 +14,10 @@ import { env } from "./env.js";
 import { errorHandler, notFoundHandler } from "./http/error-handler.js";
 import { healthRouter } from "./routes/health.js";
 import { meRouter } from "./routes/me.js";
+import { onboardingRouter } from "./routes/onboarding.js";
+import { farmerRouter } from "./routes/farmer.js";
+import { centreRouter } from "./routes/centre.js";
+import { adminRouter } from "./routes/admin.js";
 
 export function createApp(): Express {
   const app = express();
@@ -22,6 +26,20 @@ export function createApp(): Express {
   // client IP are only correct with the proxy trusted.
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
+
+  /**
+   * Money is stored as integer paise in `BigInt` columns, and `JSON.stringify`
+   * throws on a bigint rather than coercing it. Serialising them here — once,
+   * for every response — rather than at each call site, because the call-site
+   * approach already failed: `amountPaise` was converted and
+   * `mspPaisePerQuintal` on the same row was not, and the endpoint 500'd.
+   *
+   * Strings, not numbers: a paise value large enough to matter would lose
+   * precision as a double, which is the whole reason these are integers.
+   */
+  app.set("json replacer", (_key: string, value: unknown) =>
+    typeof value === "bigint" ? value.toString() : value,
+  );
 
   // Exactly the web origin, never `*`: with `*` any page on the internet can
   // call this API with a token it phished. The session rides on the
@@ -52,6 +70,10 @@ export function createApp(): Express {
   // to be coordinated across two deploys in one evening.
   const v1 = express.Router();
   v1.use(meRouter);
+  v1.use(onboardingRouter);
+  v1.use(farmerRouter);
+  v1.use(centreRouter);
+  v1.use(adminRouter);
   app.use(API_PREFIX, v1);
 
   app.use(notFoundHandler);

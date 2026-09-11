@@ -105,14 +105,33 @@ export async function resolveSession(req: Request): Promise<Session> {
 }
 
 /**
- * Demo mode: auth is off and the API resolves the first seeded farmer, so UI
- * work is never blocked on provisioning. Decided by the API — if the browser
- * decided, anyone could flip it with a devtools edit.
+ * Demo mode: auth is off and the API resolves a seeded persona, so UI work is
+ * never blocked on provisioning.
+ *
+ * `DEMO_ROLE` picks which one. It is read from the server environment and never
+ * from the request, so it stays a deployment choice rather than something a
+ * browser can escalate into — a header would let any client promote itself to
+ * admin, which is the whole reason demo mode is decided by the API.
  */
 async function resolveDemoSession(): Promise<Session> {
   try {
-    const farmer = await prisma.farmer.findFirst({ orderBy: { createdAt: "asc" }, select: { clerkId: true } });
-    return { userId: farmer?.clerkId ?? DEMO_USER_ID, role: "farmer", demoMode: true };
+    if (env.DEMO_ROLE === "farmer") {
+      const farmer = await prisma.farmer.findFirst({
+        // The first VERIFIED farmer: resolving one still behind the Aadhaar gate
+        // would make every farmer route 403 in demo mode and look like a bug.
+        where: { aadhaarVerified: true },
+        orderBy: { createdAt: "asc" },
+        select: { clerkId: true },
+      });
+      return { userId: farmer?.clerkId ?? DEMO_USER_ID, role: "farmer", demoMode: true };
+    }
+
+    const officer = await prisma.officer.findFirst({
+      where: { role: env.DEMO_ROLE },
+      orderBy: { createdAt: "asc" },
+      select: { clerkId: true },
+    });
+    return { userId: officer?.clerkId ?? DEMO_USER_ID, role: env.DEMO_ROLE, demoMode: true };
   } catch (error) {
     console.error("Demo session lookup failed", error);
     throw upstreamUnavailable("The database is waking up. Please try again in a moment.");

@@ -31,6 +31,12 @@ const schema = z.object({
 
   // Comma-separated list of allowed browser origins. Never `*`.
   WEB_ORIGIN: z.string().default("http://localhost:5173"),
+
+  // Which seeded persona demo mode resolves. Without this, demo mode could only
+  // ever be a farmer, and the officer and admin panels would be undevelopable
+  // with auth off — which defeats the point of having a demo mode.
+  // Ignored entirely when CLERK_SECRET_KEY is set.
+  DEMO_ROLE: z.enum(["farmer", "officer", "admin"]).default("farmer"),
 });
 
 const parsed = schema.safeParse(process.env);

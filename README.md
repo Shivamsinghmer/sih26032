@@ -81,9 +81,12 @@ Neon's free tier suspends the compute and the first wake outlasts Prisma's 5s
 default. `apps/api/src/env.ts` warns at boot if either rule is broken.
 
 **Demo mode.** Leave `CLERK_SECRET_KEY` blank and auth is off: every panel opens
-and the API resolves the first seeded farmer, so UI work is never blocked on
-provisioning. Demo mode is decided by the API and reported through `/me` — if the
-browser decided, anyone could flip it in devtools.
+and the API resolves a seeded persona, so UI work is never blocked on
+provisioning. `DEMO_ROLE=farmer|officer|admin` picks which one — without it the
+officer and admin panels could not be developed with auth off at all. Both are
+read from the server environment and reported through `/me`; neither is
+settable from a request, because a header would let any client promote itself
+to admin.
 
 ## Build status
 
@@ -92,7 +95,8 @@ browser decided, anyone could flip it in devtools.
 | 1 · `packages/shared` — types and the socket contract | done |
 | 2 · `apps/api` — Prisma schema, `GET /health`, `GET /me` | done |
 | 3a · capacity engine, slot allocator, payment stages, seed — 29 unit tests | done |
-| 3b · `apps/api` — the rest of the REST contract in [API.md](./docs/API.md) | next |
+| 3b · `apps/api` — the REST contract in [API.md](./docs/API.md), all endpoints | done |
+| 3c · `apps/api` — Aadhaar Secure QR verification | next |
 | 4 · `apps/web` — Vite shell, Clerk provider, `/me` guard | not started |
 | 5 · `apps/web` — the three panels, farmer first | not started |
 | 6 · Socket.IO, with an authenticated handshake | not started |
