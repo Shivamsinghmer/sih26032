@@ -5,13 +5,21 @@
  * silently drops half the broadcasts — see docs/ARCHITECTURE.md.
  */
 
+import { createServer } from "node:http";
 import { createApp } from "./app.js";
 import { env } from "./env.js";
 import { prisma } from "./db.js";
+import { initRealtime } from "./realtime.js";
 
 const app = createApp();
 
-const server = app.listen(env.PORT, () => {
+// An explicit http server, because Socket.IO attaches to it rather than to the
+// Express app. This service is a long-lived process by definition, which is the
+// reason the two-service split exists at all.
+const server = createServer(app);
+initRealtime(server);
+
+server.listen(env.PORT, () => {
   console.log(`api listening on :${env.PORT}  (${env.NODE_ENV})`);
   console.log(`  cors origin   ${env.webOrigins.join(", ")}`);
   if (env.demoMode) {

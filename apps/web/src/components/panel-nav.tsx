@@ -8,6 +8,7 @@
 
 import { NavLink } from "react-router";
 import type { MeResponse } from "@mandi/shared";
+import { ConnectionBadge } from "../lib/realtime.js";
 
 export interface NavItem {
   to: string;
@@ -39,6 +40,7 @@ export function PanelNav({ me, items }: { me: MeResponse; items: NavItem[] }) {
         ))}
 
         <div className="ml-auto flex items-center gap-3">
+          <ConnectionBadge />
           {me.demoMode && (
             <span
               className="rounded-full bg-marigold px-3 py-1 text-caption font-medium text-ink-black"

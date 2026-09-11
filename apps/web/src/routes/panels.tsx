@@ -7,6 +7,7 @@ import { Outlet } from "react-router";
 import { PanelNav, type NavItem } from "../components/panel-nav.js";
 import { Page, PageHeader } from "../components/page.js";
 import { useMe, RequireRole, RequireFarmerGates } from "../auth/session.js";
+import { RealtimeProvider } from "../lib/realtime.js";
 
 const FARMER_NAV: NavItem[] = [
   { to: "/farmer", label: "Dashboard" },
@@ -28,11 +29,13 @@ const ADMIN_NAV: NavItem[] = [
 
 function Shell({ items }: { items: NavItem[] }) {
   const me = useMe();
+  // Inside the session guard, so the socket only ever connects once we know who
+  // the user is and which rooms are theirs to ask for.
   return (
-    <>
+    <RealtimeProvider>
       <PanelNav me={me} items={items} />
       <Outlet />
-    </>
+    </RealtimeProvider>
   );
 }
 

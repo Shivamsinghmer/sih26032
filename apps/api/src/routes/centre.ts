@@ -27,6 +27,9 @@ import { startOfDayUtc, endOfDayUtc, parseDateOnly, today, addDays } from "../li
 import type { Locale } from "@mandi/shared";
 import { notify, notifyMany, formatPaise, localisedReslotReason } from "../lib/notifications.js";
 import { activeSeason } from "../lib/season.js";
+import {
+  emitBookingReslotted, emitCapacityUpdate, emitPaymentStage, emitQueueUpdate, emitAdminEscalation,
+} from "../realtime.js";
 
 export const centreRouter: Router = Router();
 
@@ -253,6 +256,29 @@ centreRouter.post("/centres/:id/capacity", officerOnly, async (req, res) => {
     })),
   );
 
+  // Push what changed. Emitting AFTER the writes and the notifications, so a
+  // client that reacts by re-fetching cannot read a half-applied day.
+  const at = new Date().toISOString();
+  emitCapacityUpdate({
+    centreId,
+    date: date.toISOString(),
+    sellableQuintals: result.sellableQuintals,
+    bindingConstraint: result.bindingConstraint,
+    at,
+  });
+  for (const booking of decision.overflow) {
+    emitBookingReslotted({
+      bookingId: booking.id,
+      farmerId: booking.farmerId,
+      centreId,
+      previousSlotStart: booking.slotStart.toISOString(),
+      slotStart: nextDay.toISOString(),
+      status: "RESLOTTED",
+      reslotReason: reason,
+      at,
+    });
+  }
+
   res.json({
     ...result,
     capacityDay: day,
@@ -328,6 +354,37 @@ centreRouter.post("/queue/advance", officerOnly, async (req, res) => {
     : { status: "NO_SHOW" as const };
 
   const updated = await prisma.booking.update({ where: { id: booking.id }, data: patch });
+
+  // Recomputed from the board rather than guessed, so every watching farmer and
+  // the officer's own screen agree on the same figures.
+  const date = startOfDayUtc(new Date());
+  const [inProgress, waiting, served] = await Promise.all([
+    prisma.booking.findFirst({
+      where: { centreId: booking.centreId, status: "IN_PROGRESS", slotStart: { gte: date, lte: endOfDayUtc(date) } },
+      orderBy: { slotStart: "asc" },
+      select: { tokenNumber: true },
+    }),
+    prisma.booking.count({
+      where: { centreId: booking.centreId, status: "ARRIVED", slotStart: { gte: date, lte: endOfDayUtc(date) } },
+    }),
+    prisma.booking.count({
+      where: { centreId: booking.centreId, status: "COMPLETED", slotStart: { gte: date, lte: endOfDayUtc(date) } },
+    }),
+  ]);
+
+  const centre = await prisma.centre.findUnique({ where: { id: booking.centreId }, select: { openHour: true } });
+  const openedAt = new Date(date);
+  openedAt.setUTCHours(centre?.openHour ?? 9, 0, 0, 0);
+  const minutesElapsed = Math.max(0, (Date.now() - openedAt.getTime()) / 60000);
+
+  emitQueueUpdate({
+    centreId: booking.centreId,
+    nowServingToken: inProgress?.tokenNumber ?? null,
+    waiting,
+    observedMinutesPerLot: served >= 3 ? Math.round((minutesElapsed / served) * 10) / 10 : null,
+    at: new Date().toISOString(),
+  });
+
   res.json({ booking: updated });
 });
 
@@ -497,8 +554,31 @@ centreRouter.patch("/lots/:id/stage", officerOnly, async (req, res) => {
     });
   }
 
+  const status = paymentStatus(updated, now);
+
+  emitPaymentStage({
+    lotId: updated.id,
+    farmerId: updated.farmerId,
+    stage: status.stage,
+    slaBreached: status.breached,
+    at: now.toISOString(),
+  });
+
+  // Still overdue after the update: the admin board needs the new owner, since
+  // moving a stage moves the accountable office with it.
+  if (status.breached) {
+    emitAdminEscalation({
+      lotId: updated.id,
+      centreId: updated.centreId,
+      stage: status.stage,
+      owner: status.owner,
+      hoursOverdue: status.hoursOverdue,
+      at: now.toISOString(),
+    });
+  }
+
   res.json({
     lot: { ...updated, amountPaise: updated.amountPaise?.toString() ?? null },
-    ...paymentStatus(updated, now),
+    ...status,
   });
 });

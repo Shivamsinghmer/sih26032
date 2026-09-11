@@ -31,6 +31,17 @@ export function setTokenProvider(provider: TokenProvider): void {
 }
 
 /**
+ * The same token the fetch wrapper attaches, for the Socket.IO handshake.
+ *
+ * The socket is not a `fetch`, so it cannot go through `api()` — but it must use
+ * the same session, and there is still exactly one place that knows how to get
+ * one.
+ */
+export function getAuthToken(): Promise<string | null> {
+  return getToken();
+}
+
+/**
  * A failed request, carrying everything the caller branches on.
  *
  * Status codes carry meaning in this API (see docs/API.md), and the machine

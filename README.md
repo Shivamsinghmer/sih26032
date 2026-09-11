@@ -102,8 +102,9 @@ to admin.
 | 4 · `apps/web` — Vite shell, Clerk provider, `/me` guard | done |
 | 5a · `apps/web` — farmer panel: dashboard, booking, live queue, payments | done |
 | 5b · `apps/web` — centre officer and district admin panels | done |
-| 6 · Socket.IO, with an authenticated handshake | next |
-| 7 · PWA — manifest, icons, service worker | not started |
+| 6 · Socket.IO — authenticated handshake, room authorisation, polling fallback | done |
+| 7 · PWA — manifest, icons, offline shell | next |
+| 8 · Replay harness — the measured fixed-quota comparison | planned |
 
 Each step leaves something runnable, so nobody is blocked on a half-finished
 layer.
@@ -118,7 +119,7 @@ mocks far harder than declared ones.
 | Capacity engine and its constraint maths | Aadhaar eKYC beyond Secure QR signature checks |
 | Slot allocation, overbooking, ETA | State land records (Jamabandi / Khasra) |
 | Payment state machine and SLA clocks | PFMS payment rail |
-| Queue management and re-slotting | SMS / IVR delivery — **email via Resend stands in** |
+| Queue management, re-slotting and realtime push | SMS / IVR delivery — **email via Resend stands in** |
 | Aadhaar Secure QR signature verification | — |
 
 ### Notifications: email now, SMS in production
