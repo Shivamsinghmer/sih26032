@@ -1,87 +1,55 @@
 /**
  * Camera capture for the Aadhaar Secure QR.
  *
- * **Capture-then-decode, not continuous scanning.** The first version decoded
- * every animation frame and did not work: an Aadhaar Secure QR is a very dense
- * code, and a live `<video>` frame is both lower resolution than the sensor can
- * produce and usually slightly motion-blurred. Decoding a still the farmer
- * chose, at full capture resolution, succeeds where a stream of frames does not
- * — and it also stops the camera running hot while someone lines up the card.
+ * Reading an Aadhaar Secure QR is genuinely hard, and this file is shaped by
+ * the ways it fails rather than by the happy path:
  *
- * Three ways in, in the order most likely to work:
- *   1. **Take a photo** with the device's own camera app (`capture="environment"`).
- *      Highest resolution by far, and the native app handles focus, which is the
- *      thing that actually decides whether a dense QR decodes.
- *   2. **In-page camera**, then an explicit Capture button.
- *   3. **Paste** the digits, for a desktop or a refused permission.
+ *  · It is a very high-version, very dense QR. jsQR — a pure-JS decoder — often
+ *    cannot read one at all, while Chrome's native `BarcodeDetector` usually
+ *    can. So the native detector is always tried first.
+ *  · A live video frame is lower resolution than the sensor can produce and
+ *    usually slightly motion-blurred, which is why this captures a still and
+ *    decodes that rather than scanning continuously.
+ *  · A photo of a whole card leaves the QR occupying a small part of the frame,
+ *    so there are too few pixels per module. Each capture is therefore retried
+ *    against several crops and scales, not just the raw image.
+ *  · The payload is a decimal digit string, but a decoder can hand it back as
+ *    bytes instead. Both are handled.
  *
- * Nothing is decided here. This reads the digit string and hands it up;
- * verification happens on the server, because a client that verifies its own
- * Aadhaar is not a check.
+ * When it still fails, it says exactly what it saw. A scanner that only says
+ * "not found" cannot be diagnosed from a field report.
+ *
+ * Nothing is decided here: this reads a string and hands it up. Verification
+ * happens on the server, because a client that verifies its own Aadhaar is not
+ * a check.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import jsQR from "jsqr";
 import { Button } from "./ui.js";
+import { decodeSecureQr, SECURE_QR, type DecodeAttempt } from "../lib/qr-decode.js";
 
-/** Chrome's BarcodeDetector, which TypeScript's DOM lib does not know about. */
-interface BarcodeDetectorLike {
-  detect(source: CanvasImageSource): Promise<{ rawValue: string }[]>;
-}
 declare global {
   interface Window {
     BarcodeDetector?: {
-      new (options?: { formats?: string[] }): BarcodeDetectorLike;
-      getSupportedFormats?: () => Promise<string[]>;
+      new (options?: { formats?: string[] }): { detect(source: unknown): Promise<{ rawValue: string }[]> };
     };
   }
 }
 
-/** A Secure QR payload is a long run of digits and nothing else. */
-const SECURE_QR = /^\d{64,}$/;
-
 type Mode = "idle" | "starting" | "live" | "blocked";
-
-/**
- * Decodes one still image.
- *
- * BarcodeDetector first where it exists — it is far better at dense codes than
- * a JS decoder. jsQR then gets two passes, because a photographed card is
- * sometimes light-on-dark depending on the surface and the flash.
- */
-async function decode(canvas: HTMLCanvasElement): Promise<string | null> {
-  if (window.BarcodeDetector) {
-    try {
-      const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
-      const codes = await detector.detect(canvas);
-      const hit = codes.map((c) => c.rawValue.trim()).find((v) => SECURE_QR.test(v));
-      if (hit) return hit;
-      if (codes.length > 0) return codes[0]!.rawValue.trim();
-    } catch {
-      // Detector unavailable or failed on this image; fall through to jsQR.
-    }
-  }
-
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return null;
-  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-  for (const inversionAttempts of ["dontInvert", "attemptBoth"] as const) {
-    const found = jsQR(image.data, canvas.width, canvas.height, { inversionAttempts });
-    if (found?.data) return found.data.trim();
-  }
-  return null;
-}
 
 export function QrScanner({ onResult }: { onResult: (payload: string) => void }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const scratchRef = useRef<HTMLCanvasElement | null>(null);
+  const previewRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const [mode, setMode] = useState<Mode>("idle");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [attempts, setAttempts] = useState(0);
+  /** What the last decode actually saw. Shown so a failure can be reported. */
+  const [diagnostic, setDiagnostic] = useState<string | null>(null);
+  const [nativeAvailable] = useState(() => Boolean(window.BarcodeDetector));
 
   const stop = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -89,13 +57,38 @@ export function QrScanner({ onResult }: { onResult: (payload: string) => void })
     setMode("idle");
   }, []);
 
-  // Never leave the camera running if the farmer navigates away. On a shared
-  // phone an unreleased camera is alarming as well as a battery drain.
   useEffect(() => stop, [stop]);
+
+  const handle = useCallback(
+    (attempt: DecodeAttempt, captured: { w: number; h: number }) => {
+      setDiagnostic(
+        `${captured.w}×${captured.h} · ${attempt.via}` +
+          (attempt.value ? ` · ${attempt.value.length} chars, starts "${attempt.value.slice(0, 12)}"` : ""),
+      );
+
+      if (attempt.value && SECURE_QR.test(attempt.value)) {
+        stop();
+        onResult(attempt.value);
+        return;
+      }
+      if (attempt.value) {
+        setNote(
+          "A QR was read, but it is not an Aadhaar Secure QR — it is the wrong code or a different format. " +
+            "Use the QR printed on the BACK of the card.",
+        );
+        return;
+      }
+      setNote(
+        "No QR found in that image. Move so the QR alone fills most of the frame, make sure it is sharp and evenly lit, " +
+          "and capture again.",
+      );
+    },
+    [onResult, stop],
+  );
 
   const openCamera = useCallback(async () => {
     setNote(null);
-    setAttempts(0);
+    setDiagnostic(null);
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setMode("blocked");
@@ -108,101 +101,87 @@ export function QrScanner({ onResult }: { onResult: (payload: string) => void })
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: "environment" },
-          // Ask for as much as the sensor will give: resolution is what decides
-          // whether a dense QR decodes at all.
-          width: { ideal: 2560 },
-          height: { ideal: 1440 },
+          width: { ideal: 3840 },
+          height: { ideal: 2160 },
         },
         audio: false,
       });
       streamRef.current = stream;
-
       const video = videoRef.current;
       if (!video) return;
       video.srcObject = stream;
       await video.play();
       setMode("live");
-      setNote("Fill the frame with the QR, hold steady until it looks sharp, then press Capture.");
+      setNote("Fill the frame with the QR square alone — not the whole card — then press Capture.");
     } catch (caught) {
       const name = caught instanceof DOMException ? caught.name : "";
       setMode("blocked");
-      if (name === "NotAllowedError" || name === "SecurityError") {
-        setNote("Camera permission was refused. Use “Take a photo”, or paste the digits below.");
-      } else if (name === "NotFoundError") {
-        setNote("No camera found on this device. Paste the digits below.");
-      } else {
-        setNote("The camera could not be started. Use “Take a photo”, or paste the digits below.");
-      }
+      setNote(
+        name === "NotAllowedError" || name === "SecurityError"
+          ? "Camera permission was refused. Use “Take a photo”, or paste the digits below."
+          : name === "NotFoundError"
+            ? "No camera found on this device. Use “Take a photo”, or paste the digits below."
+            : "The camera could not be started. Use “Take a photo”, or paste the digits below.",
+      );
     }
   }, []);
 
-  /** Grabs one still from the live preview and decodes it. */
   const capture = useCallback(async () => {
     const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas || video.readyState < video.HAVE_CURRENT_DATA) return;
+    const scratch = scratchRef.current;
+    if (!video || !scratch || video.readyState < video.HAVE_CURRENT_DATA) return;
 
     setBusy(true);
     setNote(null);
     try {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const w = video.videoWidth;
+      const h = video.videoHeight;
 
-      const found = await decode(canvas);
-      setAttempts((a) => a + 1);
+      // Keep the still visible, so it is obvious whether the photo was sharp.
+      const preview = previewRef.current;
+      if (preview) {
+        preview.width = w;
+        preview.height = h;
+        preview.getContext("2d")?.drawImage(video, 0, 0, w, h);
+      }
 
-      if (found && SECURE_QR.test(found)) {
-        stop();
-        onResult(found);
-        return;
-      }
-      if (found) {
-        setNote("That is a QR code, but not an Aadhaar Secure QR. Use the QR on the BACK of the card.");
-        return;
-      }
-      setNote(
-        "No QR found in that photo. Move closer so the code fills the frame, hold still, and make sure it is in focus — then capture again.",
+      handle(
+        await decodeSecureQr(video, w, h, () => scratch, window.BarcodeDetector),
+        { w, h },
       );
     } finally {
       setBusy(false);
     }
-  }, [onResult, stop]);
+  }, [handle]);
 
-  /** Decodes a photo taken with the device's own camera app, or picked from the gallery. */
   const fromFile = useCallback(
     async (file: File) => {
       setBusy(true);
       setNote(null);
       try {
         const bitmap = await createImageBitmap(file);
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
-        canvas.getContext("2d")?.drawImage(bitmap, 0, 0);
-        bitmap.close();
+        const scratch = scratchRef.current;
+        if (!scratch) return;
 
-        const found = await decode(canvas);
-        setAttempts((a) => a + 1);
-
-        if (found && SECURE_QR.test(found)) {
-          stop();
-          onResult(found);
-          return;
+        const preview = previewRef.current;
+        if (preview) {
+          preview.width = bitmap.width;
+          preview.height = bitmap.height;
+          preview.getContext("2d")?.drawImage(bitmap, 0, 0);
         }
-        setNote(
-          found
-            ? "That is a QR code, but not an Aadhaar Secure QR. Use the QR on the BACK of the card."
-            : "No QR found in that photo. Take it closer and in focus, with the whole code visible.",
+
+        handle(
+          await decodeSecureQr(bitmap, bitmap.width, bitmap.height, () => scratch, window.BarcodeDetector),
+          { w: bitmap.width, h: bitmap.height },
         );
+        bitmap.close();
       } catch {
-        setNote("That image could not be read. Try another photo, or paste the digits below.");
+        setNote("That image could not be opened. Try another photo, or paste the digits below.");
       } finally {
         setBusy(false);
       }
     },
-    [onResult, stop],
+    [handle],
   );
 
   return (
@@ -221,19 +200,17 @@ export function QrScanner({ onResult }: { onResult: (payload: string) => void })
           </Button>
         )}
 
-        {/* The native camera app: highest resolution and real autofocus, which
-            is usually what makes a dense Aadhaar QR decode. */}
+        {/* The native camera app, or an existing photo. Highest resolution and
+            real autofocus, which is usually what decides a dense QR. */}
         <label className="transition-notion cursor-pointer rounded-button bg-sky-tint px-[15px] py-2 text-body-sm font-medium text-notion-blue hover:opacity-90">
-          Take a photo
+          Take a photo / choose image
           <input
             type="file"
             accept="image/*"
-            capture="environment"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) void fromFile(file);
-              // Reset, so picking the same file twice still fires a change.
               e.target.value = "";
             }}
           />
@@ -241,29 +218,44 @@ export function QrScanner({ onResult }: { onResult: (payload: string) => void })
       </div>
 
       {(mode === "live" || mode === "starting") && (
-        <div className="mt-3">
-          <div className="relative overflow-hidden rounded-card border border-hairline bg-ink-black">
-            <video ref={videoRef} playsInline muted className="block max-h-[60vh] w-full object-cover" />
-            <div className="pointer-events-none absolute inset-0 grid place-content-center">
-              <div className="size-56 rounded-card border-2 border-pure-white/80" />
-            </div>
+        <div className="relative mt-3 overflow-hidden rounded-card border border-hairline bg-ink-black">
+          <video ref={videoRef} playsInline muted className="block max-h-[60vh] w-full object-cover" />
+          <div className="pointer-events-none absolute inset-0 grid place-content-center">
+            <div className="size-56 rounded-card border-2 border-pure-white/80" />
           </div>
         </div>
       )}
 
-      <canvas ref={canvasRef} className="hidden" />
+      {/* The captured still. Seeing it is how you tell a blurred photo from a
+          decoder that simply could not read a sharp one. */}
+      <canvas
+        ref={previewRef}
+        className={`mt-3 max-h-64 w-full rounded-card border border-hairline object-contain ${diagnostic ? "" : "hidden"}`}
+      />
+      <canvas ref={scratchRef} className="hidden" />
 
-      {note && (
-        <p className="mt-3 rounded-small bg-paper-warmth px-3 py-2 text-body-sm">
-          {note}
-          {attempts >= 2 && (
-            <span className="mt-1 block text-caption text-stone">
-              Still not reading? The Aadhaar QR is dense — “Take a photo” usually works better than
-              the in-page camera, or paste the digits below.
-            </span>
-          )}
+      {note && <p className="mt-3 rounded-small bg-paper-warmth px-3 py-2 text-body-sm">{note}</p>}
+
+      {diagnostic && (
+        <p className="mt-2 font-mono text-caption text-stone">
+          {diagnostic}
+          {!nativeAvailable && " · no native QR decoder in this browser (Chrome reads dense codes best)"}
         </p>
       )}
+
+      <details className="mt-3">
+        <summary className="cursor-pointer text-body-sm text-notion-blue">It still will not read</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-body-sm text-graphite">
+          <li>Photograph the <strong>QR square alone</strong>, close up — not the whole card.</li>
+          <li>Use “Take a photo”: the phone camera app focuses properly, the in-page one often does not.</li>
+          <li>Avoid glare on laminated cards — angle away from the light rather than using flash.</li>
+          <li>On a desktop, open Chrome: it has a native QR decoder that reads these far better.</li>
+          <li>
+            Otherwise scan with any QR app and paste the long number below — that path always works,
+            and the check happens on our server either way.
+          </li>
+        </ul>
+      </details>
     </div>
   );
 }
