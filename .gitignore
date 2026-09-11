@@ -4,6 +4,11 @@ dist/
 .env.local
 *.log
 .DS_Store
-apps/api/prisma/certs/*.cer
-!apps/api/prisma/certs/README.md
 *.tsbuildinfo
+
+# UIDAI document-signer certificates are PUBLIC data, published by UIDAI for
+# exactly this offline verification, and are deliberately committed. Without one
+# on disk every Secure QR scan fails closed (parses, but signatureVerified stays
+# false), so shipping them with the code is what keeps a deploy from silently
+# degrading to "nothing verifies". Never put a PRIVATE key here.
+!apps/api/src/lib/aadhaar/certs/*.cer
