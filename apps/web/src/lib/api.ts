@@ -26,6 +26,42 @@ const BASE = (CONFIGURED || window.location.origin).replace(/\/$/, "");
 const PREFIX = "/api/v1";
 
 /**
+ * Same origin is correct in development, where the dev server proxies /api.
+ * In a production build it almost always means VITE_API_URL was missing when
+ * the bundle was built — and because VITE_* values are inlined at build time,
+ * setting it afterwards changes nothing until a rebuild.
+ */
+const SAME_ORIGIN_IN_PROD = import.meta.env.PROD && CONFIGURED === "";
+
+if (SAME_ORIGIN_IN_PROD) {
+  console.error(
+    "VITE_API_URL was not set when this bundle was built, so API calls are going to this site's own " +
+      "origin, where there is no API. Set it on the host and redeploy — VITE_* values are baked in at build time.",
+  );
+}
+
+/**
+ * Why a request failed before it ever got a response.
+ *
+ * The browser deliberately hides the difference between a CORS rejection, a
+ * blocked mixed-content request and an unreachable host — `fetch` throws the
+ * same opaque TypeError for all three. Guessing is not possible, so name all
+ * the candidates and give the one fact that narrows them: the URL it tried.
+ */
+function networkDiagnosis(): string {
+  if (SAME_ORIGIN_IN_PROD) {
+    return `No API is configured. Requests are going to ${BASE}, which is this site itself. VITE_API_URL was not set when this build was made.`;
+  }
+
+  const pageIsHttps = window.location.protocol === "https:";
+  if (pageIsHttps && BASE.startsWith("http://")) {
+    return `The API is configured as ${BASE}, which is plain http. This page is https, and browsers block that. The API needs to be served over https.`;
+  }
+
+  return `Could not reach ${BASE}. Either the API is not running, or it is not allowing requests from ${window.location.origin} — its WEB_ORIGIN must match this exactly.`;
+}
+
+/**
  * Clerk holds the session inside React context, but router loaders run outside
  * it. One provider function is registered at mount and used by every request,
  * which keeps the "exactly one place" rule intact without threading a token
@@ -133,7 +169,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     // A dead network is indistinguishable from a dead server from here, and
     // both are "could not find out" rather than "the answer is no".
     if (error instanceof DOMException && error.name === "AbortError") throw error;
-    throw new ApiRequestError(0, "network", "We could not reach the server. Check your connection and try again.");
+    throw new ApiRequestError(0, "network", networkDiagnosis());
   }
 
   if (response.status === 204) return undefined as T;

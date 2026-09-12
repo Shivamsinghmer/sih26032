@@ -46,8 +46,12 @@ function RetryPanel({ error, onRetry }: { error: ApiRequestError; onRetry: () =>
     <div className="grid min-h-dvh place-content-center justify-items-center gap-4 px-6 text-center">
       <h1 className="text-heading-sm font-semibold">We could not reach the service</h1>
       <p className="max-w-prose text-body text-graphite">{error.message}</p>
+      {/* A 503 really is usually a cold database. A network failure is not —
+          saying so sends people to look in the wrong place. */}
       <p className="max-w-prose text-body-sm text-stone">
-        This is usually the database waking up after an idle spell, and it clears in a few seconds.
+        {error.code === "network"
+          ? "The app loaded, but it cannot reach its API. That is a configuration problem rather than a passing outage."
+          : "This is usually the database waking up after an idle spell, and it clears in a few seconds."}
       </p>
       <button
         type="button"
