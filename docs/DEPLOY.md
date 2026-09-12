@@ -59,7 +59,20 @@ The health check is `/health`, which answers `{ ok, db, dbLatencyMs }`. A
 `dbLatencyMs` of several seconds on the first request is Neon's free tier waking
 its compute, not a fault.
 
-## 2 · Web on Vercel
+## 2 · Web on Netlify or Vercel
+
+Either works; both configs are committed (`netlify.toml`, `vercel.json`) so the
+build command does not have to be typed into a dashboard.
+
+**If you set the build command by hand, it must build `@mandi/shared` first.**
+`npm --workspace @mandi/web run build` alone does not, and the failure is
+misleading: every import of `@mandi/shared` reports "Cannot find module",
+followed by dozens of implicit-any errors that look like a broken codebase
+rather than a missing build step. The web package now runs a `prebuild` that
+builds shared, so that command self-heals — but the committed config is the
+thing to rely on.
+
+### Vercel
 
 ```bash
 npm i -g vercel

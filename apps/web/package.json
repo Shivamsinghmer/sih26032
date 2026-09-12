@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test src/**/*.test.ts",
+    "prebuild": "npm run build -w @mandi/shared --prefix ../.."
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",

@@ -1,0 +1,41 @@
+# Netlify build configuration.
+#
+# Committed so the build does not depend on what is typed into the dashboard.
+# Settings here override the UI ones, which is the point: the UI had
+# `npm --workspace @mandi/web run build`, which never builds @mandi/shared, so
+# every import of it resolved to a dist/ that did not exist and the whole
+# type-check collapsed into "Cannot find module" plus a cascade of implicit-any.
+
+[build]
+  command = "npm run build -w @mandi/shared && npm run build -w @mandi/web"
+  publish = "apps/web/dist"
+
+[build.environment]
+  # Match the Node the repo is developed against.
+  NODE_VERSION = "22"
+
+# Single-page app. Netlify serves real files first, so this only catches routes
+# that React Router owns, like /farmer/queue.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# The service worker must never be served stale, or a deploy cannot replace the
+# one already installed on someone's phone.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# Build assets are content-hashed, so they can be cached indefinitely.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
