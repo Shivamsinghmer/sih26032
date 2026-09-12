@@ -110,7 +110,7 @@ describe("Secure QR decoding", () => {
 
     const result = await decodeSecureQr(canvas, 600, 600, makeCanvas);
     assert.equal(result.value, "https://example.com");
-    assert.match(result.via, /other QR/);
+    assert.match(result.via, /not a Secure QR/);
     assert.equal(SECURE_QR.test(result.value!), false);
   });
 
@@ -142,5 +142,46 @@ describe("byte-mode payloads", () => {
 
   test("rejects something too short to be a payload", () => {
     assert.equal(bytesToDigits([1, 2, 3]), null);
+  });
+});
+
+describe("a native detector that returns mojibake", () => {
+  test("does not stop jsQR from finding the real payload", async () => {
+    // The bug this guards: BarcodeDetector only returns a string, so a
+    // byte-mode QR arrives as a lossy UTF-8 decode. Returning that immediately
+    // meant jsQR never ran — and jsQR is the only decoder here that exposes
+    // binaryData. The symptom was "something scanned, but it says it is not an
+    // Aadhaar QR", which is exactly what people report of ordinary QR apps.
+    const data = payload(2400);
+    const photo = await photograph(data, 1280, 720, 0.8);
+
+    class Mojibake {
+      async detect() {
+        return [{ rawValue: "\uFFFD\uFFFD\u0012\uFFFDq\uFFFD" }];
+      }
+    }
+
+    const result = await decodeSecureQr(
+      photo, photo.width, photo.height, makeCanvas, Mojibake as never,
+    );
+    assert.equal(result.value, data, "jsQR should still have been given a chance");
+    assert.match(result.via, /jsQR/);
+  });
+
+  test("still reports the non-Secure value when nothing better is found", async () => {
+    const blank = createCanvas(640, 480);
+    const ctx = blank.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 640, 480);
+
+    class Other {
+      async detect() {
+        return [{ rawValue: "https://example.com" }];
+      }
+    }
+
+    const result = await decodeSecureQr(blank, 640, 480, makeCanvas, Other as never);
+    assert.equal(result.value, "https://example.com");
+    assert.match(result.via, /not a Secure QR/);
   });
 });

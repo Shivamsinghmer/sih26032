@@ -96,6 +96,20 @@ export async function decodeSecureQr(
   const ctx = canvas.getContext("2d", { willReadFrequently: true }) as Ctx2D | null;
   if (!ctx) return { value: null, via: "no canvas" };
 
+  /**
+   * Anything decoded that was NOT a Secure QR payload, held back rather than
+   * returned.
+   *
+   * This is load-bearing. `BarcodeDetector` only ever hands back a string, so a
+   * byte-mode QR reaches us as a lossy UTF-8 decode — mojibake that is not
+   * digits. Returning that immediately (as the first version did) meant jsQR
+   * never ran, and jsQR is the only decoder here that exposes `binaryData`, from
+   * which the real digit string can be rebuilt. The symptom was precisely the
+   * one people report of ordinary QR apps: something scans, the value is
+   * useless, and the app says it is not an Aadhaar QR.
+   */
+  let nonSecure: DecodeAttempt | null = null;
+
   // Native decoder first, on the untouched image — by far the most capable.
   if (detector) {
     try {
@@ -105,7 +119,9 @@ export async function decodeSecureQr(
       const codes = await new detector({ formats: ["qr_code"] }).detect(canvas);
       const digits = codes.map((c) => c.rawValue.trim()).find((v) => SECURE_QR.test(v));
       if (digits) return { value: digits, via: "BarcodeDetector" };
-      if (codes[0]) return { value: codes[0].rawValue.trim(), via: "BarcodeDetector (other QR)" };
+      if (codes[0]) {
+        nonSecure = { value: codes[0].rawValue.trim(), via: "BarcodeDetector (not a Secure QR)" };
+      }
     } catch {
       // Unsupported, or failed on this image. Fall through to jsQR.
     }
@@ -143,11 +159,14 @@ export async function decodeSecureQr(
             const digits = bytesToDigits(found.binaryData);
             if (digits) return { value: digits, via: `${via} (bytes)` };
           }
-          if (text) return { value: text, via: `${via} (other QR)` };
+          // Keep looking: a later, tighter crop may still find the Secure QR.
+          if (text && !nonSecure) nonSecure = { value: text, via: `${via} (not a Secure QR)` };
         }
       }
     }
   }
 
-  return { value: null, via: "no QR detected" };
+  // Nothing was a Secure QR. Report what WAS read, if anything, so the message
+  // can say "wrong QR" rather than "no QR" — they need different remedies.
+  return nonSecure ?? { value: null, via: "no QR detected" };
 }

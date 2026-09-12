@@ -72,9 +72,11 @@ export function QrScanner({ onResult }: { onResult: (payload: string) => void })
         return;
       }
       if (attempt.value) {
+        // Very often the SMALL qr on an older Aadhaar letter, which is plain
+        // text and unsigned — not the Secure QR at all.
         setNote(
-          "A QR was read, but it is not an Aadhaar Secure QR — it is the wrong code or a different format. " +
-            "Use the QR printed on the BACK of the card.",
+          "A QR was read, but it is not the Aadhaar Secure QR. Many Aadhaar cards and letters carry " +
+            "two codes: a small one holding plain text, and the large Secure QR. Use the LARGE one.",
         );
         return;
       }
@@ -245,16 +247,34 @@ export function QrScanner({ onResult }: { onResult: (payload: string) => void })
 
       <details className="mt-3">
         <summary className="cursor-pointer text-body-sm text-notion-blue">It still will not read</summary>
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-body-sm text-graphite">
-          <li>Photograph the <strong>QR square alone</strong>, close up — not the whole card.</li>
-          <li>Use “Take a photo”: the phone camera app focuses properly, the in-page one often does not.</li>
-          <li>Avoid glare on laminated cards — angle away from the light rather than using flash.</li>
-          <li>On a desktop, open Chrome: it has a native QR decoder that reads these far better.</li>
-          <li>
-            Otherwise scan with any QR app and paste the long number below — that path always works,
-            and the check happens on our server either way.
-          </li>
-        </ul>
+        <div className="mt-2 space-y-3 text-body-sm text-graphite">
+          <p>
+            The Aadhaar Secure QR <strong>is</strong> an ordinary QR code, but a very dense one — it
+            carries a few thousand characters including a photo. Everyday QR apps often fail on it, or
+            read it and then show nothing because the contents are a long number rather than a link.
+            That is why UIDAI publishes its own scanner. It is not that the code is special; it is that
+            it is big.
+          </p>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              Use the <strong>large</strong> QR. Older cards and letters also carry a small one that
+              holds plain text and is not signed — that one cannot verify anything.
+            </li>
+            <li>Photograph the <strong>QR square alone</strong>, close up — not the whole card.</li>
+            <li>Prefer “Take a photo”: the phone camera app focuses properly, the in-page one often does not.</li>
+            <li>Avoid glare on laminated cards — angle away from the light rather than using flash.</li>
+            <li>On a desktop, use Chrome: it has a native QR decoder that handles dense codes far better.</li>
+            <li>
+              A cleaner source beats a better camera: open your e-Aadhaar PDF, zoom the QR on screen,
+              and photograph or screenshot that.
+            </li>
+          </ul>
+          <p>
+            <strong>If any QR app shows you a very long number, that is the payload.</strong> Copy it
+            and paste it below — that path always works, and the verification happens on our server
+            either way.
+          </p>
+        </div>
       </details>
     </div>
   );
