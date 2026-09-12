@@ -163,12 +163,25 @@ export interface RequestOptions {
   query?: Record<string, string | number | undefined | null>;
 }
 
-function buildUrl(path: string, query: RequestOptions["query"]): string {
-  const url = new URL(BASE + PREFIX + (path.startsWith("/") ? path : `/${path}`));
+/**
+ * Where requests are actually going.
+ *
+ * Starts at the configured base and can fall back to this site's own origin —
+ * see `api()` below for why.
+ */
+let effectiveBase = BASE;
+
+function buildUrl(base: string, path: string, query: RequestOptions["query"]): string {
+  const url = new URL(base + PREFIX + (path.startsWith("/") ? path : `/${path}`));
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
   }
   return url.toString();
+}
+
+/** Exposed for diagnostics and tests; not for building URLs elsewhere. */
+export function currentApiBase(): string {
+  return effectiveBase;
 }
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -178,19 +191,51 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   if (token) headers["Authorization"] = `Bearer ${token}`;
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
 
+  const init: RequestInit = {
+    method: options.method ?? "GET",
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    signal: options.signal ?? null,
+  };
+
   let response: Response;
   try {
-    response = await fetch(buildUrl(path, options.query), {
-      method: options.method ?? "GET",
-      headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      signal: options.signal ?? null,
-    });
+    response = await fetch(buildUrl(effectiveBase, path, options.query), init);
   } catch (error) {
     // A dead network is indistinguishable from a dead server from here, and
     // both are "could not find out" rather than "the answer is no".
     if (error instanceof DOMException && error.name === "AbortError") throw error;
-    throw new ApiRequestError(0, "network", networkDiagnosis());
+
+    /**
+     * Last resort: try this site's own origin.
+     *
+     * A cross-origin API host can be unreachable for reasons the app cannot fix
+     * and the user cannot be asked to fix — this project hit a mobile network
+     * that refuses to resolve *.up.railway.app at all, which arrives as
+     * ERR_NAME_NOT_RESOLVED. Where the site is served by a host that proxies
+     * /api (see netlify.toml), the same API is reachable on this origin, so one
+     * retry there turns a dead app into a working one.
+     *
+     * It is deliberately narrow: only after a network-level failure, only when
+     * the base is not already this origin, and it sticks for the session only
+     * if it actually works. It cannot reach anywhere the page was not already
+     * served from, so it opens nothing.
+     */
+    const sameOrigin = window.location.origin;
+    if (effectiveBase !== sameOrigin) {
+      try {
+        response = await fetch(buildUrl(sameOrigin, path, options.query), init);
+        console.warn(
+          `Could not reach ${effectiveBase}; this origin answered instead, so the rest of this session will use it. ` +
+            "Set VITE_API_URL to / if the host proxies the API, or fix the API hostname.",
+        );
+        effectiveBase = sameOrigin;
+      } catch {
+        throw new ApiRequestError(0, "network", networkDiagnosis());
+      }
+    } else {
+      throw new ApiRequestError(0, "network", networkDiagnosis());
+    }
   }
 
   if (response.status === 204) return undefined as T;
