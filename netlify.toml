@@ -14,6 +14,38 @@
   # Match the Node the repo is developed against.
   NODE_VERSION = "22"
 
+# ---------------------------------------------------------------------------
+# Proxy the API through this origin.
+#
+# The browser then only ever resolves this site's own hostname; Netlify's
+# servers do the lookup of the API host. That matters because some Indian
+# mobile networks refuse to resolve *.up.railway.app outright — measured here
+# as "DNS operation refused" from the phone hotspot's resolver while 1.1.1.1
+# and 8.8.8.8 both answered — which surfaces in the browser as
+# ERR_NAME_NOT_RESOLVED and is not something the app can fix from the client.
+#
+# It also removes CORS from the picture entirely: one origin, so there is no
+# cross-origin request to allow, and WEB_ORIGIN stops being load-bearing.
+#
+# These MUST come before the SPA catch-all below — redirects are matched in
+# order, and /* would otherwise swallow /api.
+#
+# Socket.IO reaches /api/socket through this proxy. Netlify does not upgrade
+# websockets, so it falls back to HTTP long-polling, which works. The realtime
+# layer is an accelerator over polling anyway, so nothing breaks if it does not.
+# ---------------------------------------------------------------------------
+[[redirects]]
+  from = "/api/*"
+  to = "https://mandiapi-production.up.railway.app/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/health"
+  to = "https://mandiapi-production.up.railway.app/health"
+  status = 200
+  force = true
+
 # Single-page app. Netlify serves real files first, so this only catches routes
 # that React Router owns, like /farmer/queue.
 [[redirects]]

@@ -30,7 +30,7 @@ const CONFIGURED = (import.meta.env["VITE_API_URL"] ?? "").trim();
  * generic "could not reach the server" — for a request the browser never made.
  */
 function normaliseBase(value: string): string {
-  if (!value) return window.location.origin;
+  if (!value || value === "/") return window.location.origin;
   const withScheme = /^https?:\/\//.test(value) ? value : `https://${value}`;
   return withScheme.replace(/\/+$/, "");
 }
@@ -43,6 +43,14 @@ const PREFIX = "/api/v1";
  * In a production build it almost always means VITE_API_URL was missing when
  * the bundle was built — and because VITE_* values are inlined at build time,
  * setting it afterwards changes nothing until a rebuild.
+ */
+/**
+ * Same origin with nobody having asked for it.
+ *
+ * `"/"` means same origin ON PURPOSE — the host proxies /api to the API, which
+ * is how this deploy avoids the client ever resolving the API's hostname. An
+ * empty value means nobody set VITE_API_URL, which in a production build is a
+ * mistake worth shouting about.
  */
 const SAME_ORIGIN_IN_PROD = import.meta.env.PROD && CONFIGURED === "";
 

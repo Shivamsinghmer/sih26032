@@ -101,6 +101,29 @@ you. Verify a deploy by grepping the built assets:
 curl -s https://YOUR-APP.vercel.app/ | grep -oE 'pk_(test|live)_[A-Za-z0-9]+' | sort -u
 ```
 
+## When the browser cannot resolve the API host
+
+Symptom: the site loads, and every request fails with `ERR_NAME_NOT_RESOLVED`
+in the console for a URL that is plainly correct.
+
+This is not a deployment fault. Some Indian mobile networks refuse to resolve
+`*.up.railway.app` at all — measured on this project as `DNS operation refused`
+from a phone hotspot's resolver, while `1.1.1.1` and `8.8.8.8` both answered
+and the API responded 200. Changing DNS on the device fixes it, but that is not
+something a jury or a farmer will do.
+
+The durable fix is committed in `netlify.toml`: **the API is proxied through the
+site's own origin.** The browser only ever resolves the Netlify hostname, and
+Netlify's servers resolve the API. Set `VITE_API_URL` to `/` and the app calls
+its own origin.
+
+That also removes CORS from the picture — one origin means no cross-origin
+request to allow, so `WEB_ORIGIN` stops being load-bearing (keep it correct
+anyway, for anyone hitting the API directly).
+
+If you move the API off Railway, update the two proxy targets in
+`netlify.toml`; they are the one place the API host is written down.
+
 ## 3 · Close the loop
 
 Set `WEB_ORIGIN` on Railway to the Vercel URL and redeploy the API. Then check:
