@@ -66,9 +66,21 @@ const raw = parsed.data;
  */
 const demoMode = raw.CLERK_SECRET_KEY.trim() === "";
 
+/**
+ * Allowed browser origins.
+ *
+ * An origin is scheme + host + port, and `cors` compares it as an exact string.
+ * A value typed into a dashboard as `example.netlify.app` or with a trailing
+ * slash therefore matches nothing, and the failure is silent: the preflight
+ * still returns 204, just without an access-control-allow-origin header, and
+ * the browser blocks the real request with a message that names neither the
+ * expected nor the received value. Normalising here turns a very easy mistake
+ * into a working config.
+ */
 const webOrigins = raw.WEB_ORIGIN.split(",")
-  .map((o) => o.trim())
-  .filter(Boolean);
+  .map((o) => o.trim().replace(/\/+$/, ""))
+  .filter(Boolean)
+  .map((o) => (/^https?:\/\//.test(o) ? o : `https://${o}`));
 
 if (webOrigins.includes("*")) {
   console.error("WEB_ORIGIN must name exact origins. With `*`, any page on the internet can call this API with a phished token.");
@@ -96,6 +108,13 @@ if (!raw.RESEND_API_KEY) {
   console.warn(
     "RESEND_FROM is Resend's shared sender, which only delivers to your own account address. " +
       "Set NOTIFY_REDIRECT_TO to that address, or verify a domain in Resend.",
+  );
+}
+
+if (raw.WEB_ORIGIN.trim() && webOrigins.join(",") !== raw.WEB_ORIGIN.trim()) {
+  console.warn(
+    `WEB_ORIGIN was normalised from "${raw.WEB_ORIGIN.trim()}" to "${webOrigins.join(", ")}". ` +
+      "An origin must be scheme + host with no trailing slash, or CORS matches nothing.",
   );
 }
 

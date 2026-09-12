@@ -22,7 +22,20 @@ import type { ApiError, ErrorCode } from "@mandi/shared";
  * alone would leave BASE as "" and `new URL("/api/v1/...")` would throw.
  */
 const CONFIGURED = (import.meta.env["VITE_API_URL"] ?? "").trim();
-const BASE = (CONFIGURED || window.location.origin).replace(/\/$/, "");
+
+/**
+ * A host typed without a scheme is the easiest mistake to make here, and the
+ * worst to diagnose: `new URL("example.up.railway.app/api/v1/me")` throws, that
+ * throw happens inside the same try/catch as the fetch, and it surfaces as a
+ * generic "could not reach the server" — for a request the browser never made.
+ */
+function normaliseBase(value: string): string {
+  if (!value) return window.location.origin;
+  const withScheme = /^https?:\/\//.test(value) ? value : `https://${value}`;
+  return withScheme.replace(/\/+$/, "");
+}
+
+const BASE = normaliseBase(CONFIGURED);
 const PREFIX = "/api/v1";
 
 /**
