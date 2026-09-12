@@ -16,3 +16,8 @@ dist/
 # tsc must never emit into src/ — these appeared once from a stray `tsc -b`.
 apps/web/src/**/*.js
 apps/web/src/**/*.js.map
+
+# tsc must never emit beside a source config — a stale vite.config.js silently
+# wins over vite.config.ts and Vite loads the wrong one.
+apps/web/vite.config.js
+apps/web/vite.config.js.map

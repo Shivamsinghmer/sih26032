@@ -13,7 +13,16 @@
 
 import type { ApiError, ErrorCode } from "@mandi/shared";
 
-const BASE = (import.meta.env["VITE_API_URL"] ?? "http://localhost:4000").replace(/\/$/, "");
+/**
+ * Where the API lives.
+ *
+ * Blank means "same origin", which is how the dev server works when it proxies
+ * /api — the setup used to test on a phone, where the page is https:// and
+ * "localhost" means the phone itself. An empty string is not nullish, so `??`
+ * alone would leave BASE as "" and `new URL("/api/v1/...")` would throw.
+ */
+const CONFIGURED = (import.meta.env["VITE_API_URL"] ?? "").trim();
+const BASE = (CONFIGURED || window.location.origin).replace(/\/$/, "");
 const PREFIX = "/api/v1";
 
 /**

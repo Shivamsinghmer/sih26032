@@ -197,6 +197,7 @@ real inbox, or a verified domain.
 | [FLOW.md](./docs/FLOW.md) | End-to-end, registration to bank credit |
 | [FEATURES.md](./docs/FEATURES.md) | Feature list per panel, prioritised |
 | [design.md](./docs/design.md) | The design system |
+| [DEPLOY.md](./docs/DEPLOY.md) | Deploying to Vercel and Railway, in the order that works |
 
 ## Licence
 
